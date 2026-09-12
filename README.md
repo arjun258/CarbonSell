@@ -4,7 +4,7 @@ Team Anomaly · Circular Carbon Ecosystem
 
 A two-sided marketplace where industrial emitters list captured CO₂ and
 utilisers find it
-React + Vite · FastAPI · SQLite · Ola Maps
+React + Vite · FastAPI · SQLite · Ola Maps.
 
 ---
 
