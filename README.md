@@ -48,7 +48,7 @@ cd backend && ../.venv/bin/uvicorn app.main:app --reload --port 8000
 cd frontend && npm run dev
 ```
 
-Open **http://localhost:5173**. API docs at **http://localhost:8000/docs**.
+Open **http://localhost:5173**.
 
 The frontend proxies `/api` to port 8000, so the browser only ever talks to
 :5173.
