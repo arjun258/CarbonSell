@@ -6,7 +6,7 @@ Rule: tuning the demo must never mean editing logic. If a judge asks
 from pathlib import Path
 
 # ---------------------------------------------------------------- app
-APP_NAME = "CarbonX"
+APP_NAME = "CarbonSell"
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_URL = f"sqlite:///{BASE_DIR / 'carbonx.db'}"
 JWT_ALGORITHM = "HS256"

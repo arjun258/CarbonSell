@@ -20,7 +20,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           Circular carbon ecosystem
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-          {health?.app ?? "CarbonX"}
+          {health?.app ?? "CarbonSell"}
         </h1>
         <p className="mt-1 max-w-xl text-ink-2">
           A marketplace where captured CO<sub>2</sub> finds the buyer who can

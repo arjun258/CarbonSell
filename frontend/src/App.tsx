@@ -54,7 +54,7 @@ function TopBar() {
     <header className="border-b border-rule bg-surface">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-6 py-3">
         <Link to="/" className="font-semibold tracking-tight">
-          {health?.app ?? "CarbonX"}
+          {health?.app ?? "CarbonSell"}
         </Link>
 
         <label className="flex items-center gap-2 text-sm">
