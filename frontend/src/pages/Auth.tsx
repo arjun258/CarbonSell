@@ -297,10 +297,6 @@ export function Signup() {
               {busy ? "Creating…" : "Create account"}
             </Button>
             <Pill tone="good">✓ Govt verified on signup</Pill>
-            <span className="text-xs text-muted">
-              GSTIN format check and the verification API are wired in the
-              design; demo companies are pre-verified.
-            </span>
           </div>
           <p className="text-sm text-muted">
             Already registered?{" "}
