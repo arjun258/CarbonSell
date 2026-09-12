@@ -35,6 +35,57 @@ import type {
   Thread,
 } from "../types";
 
+/** One bid, with the way back into a deal if it was turned down. */
+export function BidRow({ b }: { b: Bid }) {
+  return (
+    <Card className="px-4 py-3">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="font-medium">{b.seller.name}</span>
+        <span className="text-xs text-muted">
+          listing #{b.listing.id} · {b.listing.purity_pct}% · {b.listing.city}
+        </span>
+        <Pill
+          tone={
+            b.status === "accepted"
+              ? "good"
+              : b.status === "rejected"
+                ? "stop"
+                : "neutral"
+          }
+        >
+          {b.status}
+        </Pill>
+        <span className="tnum ml-auto text-sm">
+          {inr(b.volume_t)} tonne @ ₹{inr(b.price_per_t)}/t
+        </span>
+      </div>
+      {b.haul && (
+        <p className="tnum mt-1 text-xs text-muted">
+          {b.haul.truck} × {b.haul.trips} · {inr(b.distance_km)} km · delivered ₹
+          {inr(b.delivered_per_t)}/t
+        </p>
+      )}
+      {b.note && <p className="mt-1 text-sm text-ink-2">“{b.note}”</p>}
+      {b.status === "rejected" && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-rule pt-2">
+          <Link
+            to={`/listings/${b.listing.id}?requirement=${b.requirement_id}`}
+            className="border border-rule-strong px-3 py-1.5 text-sm hover:border-accent hover:text-accent"
+          >
+            Bid again on this listing
+          </Link>
+          <Link
+            to={`/requirements/${b.requirement_id}/matches`}
+            className="text-sm text-accent underline"
+          >
+            or see who else can supply this →
+          </Link>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 /* --------------------------------------------------------------- overview */
 
 export function BuyerOverview() {
@@ -44,11 +95,21 @@ export function BuyerOverview() {
   }, []);
   if (!d) return <p className="text-sm text-muted">Loading…</p>;
 
+  const pending = d.bids.filter((b) => b.status === "pending");
+  const rejected = d.bids.filter((b) => b.status === "rejected");
+
   return (
     <div className="flex flex-col gap-6">
       <KpiRow kpis={d.kpis} />
+
       <div>
-        <SectionTitle right={<Link to="/requirements" className="text-accent underline">All requirements</Link>}>
+        <SectionTitle
+          right={
+            <Link to="/requirements" className="text-accent underline">
+              All requirements
+            </Link>
+          }
+        >
           Best matches right now
         </SectionTitle>
         {d.best_matches?.length ? (
@@ -69,8 +130,8 @@ export function BuyerOverview() {
                   </span>
                 </div>
                 <p className="tnum mt-1 text-sm text-muted">
-                  {m.purity_pct}% · {m.address_line} ·{" "}
-                  {inr(m.distance_km)} km · feasibility {m.score}
+                  {m.purity_pct}% · {m.address_line} · {inr(m.distance_km)} km ·
+                  feasibility {m.score}
                 </p>
                 <Link
                   to={`/requirements/${m.requirement_id}/matches`}
@@ -88,6 +149,108 @@ export function BuyerOverview() {
           />
         )}
       </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div>
+          <SectionTitle
+            right={<Link to="/orders" className="text-accent underline">All orders</Link>}
+          >
+            Orders
+          </SectionTitle>
+          {d.orders.length ? (
+            <div className="flex flex-col gap-3">
+              {d.orders.map((o) => (
+                <Card key={o.id} className="px-4 py-3">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="font-mono text-xs text-muted">#{o.id}</span>
+                    <span className="font-medium">{o.counterpart.name}</span>
+                    <Pill tone={o.status === "delivered" ? "good" : "warn"}>
+                      {o.status.replace("_", " ")}
+                    </Pill>
+                    <span className="tnum ml-auto text-sm">
+                      {inr(o.volume_t)} tonne · ₹{inr(o.total_value)}
+                    </span>
+                  </div>
+                  <p className="tnum mt-1 text-xs text-muted">
+                    {o.pickup
+                      ? `pickup ${o.pickup.scheduled_date}, ${o.pickup.slot} · ${o.pickup.address.city}`
+                      : "the seller has not scheduled a pickup yet"}
+                  </p>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Empty title="No orders yet" hint="Accepted bids land here." />
+          )}
+        </div>
+
+        <div>
+          <SectionTitle
+            right={<Link to="/messages" className="text-accent underline">All messages</Link>}
+          >
+            Conversations
+          </SectionTitle>
+          {d.threads.length ? (
+            <div className="flex flex-col gap-3">
+              {d.threads.map((t) => (
+                <Card key={t.id} className="px-4 py-3">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="font-medium">{t.counterpart.name}</span>
+                    <Pill tone={t.contact_shared ? "good" : "neutral"}>
+                      {t.contact_shared ? "number shared" : "number hidden"}
+                    </Pill>
+                    <span className="tnum ml-auto text-xs text-muted">
+                      {t.message_count} message{t.message_count === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <p className="mt-1 truncate text-sm text-ink-2">
+                    {t.last_message || "No messages yet"}
+                  </p>
+                  <Link
+                    to="/messages"
+                    className="mt-1 inline-block text-xs text-accent underline"
+                  >
+                    Open →
+                  </Link>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Empty
+              title="No conversations"
+              hint="Open a listing and message the seller."
+            />
+          )}
+        </div>
+      </div>
+
+      <div>
+        <SectionTitle
+          right={<Link to="/bids" className="text-accent underline">All bids</Link>}
+        >
+          Bids awaiting a reply
+        </SectionTitle>
+        {pending.length ? (
+          <div className="flex flex-col gap-3">
+            {pending.map((b) => (
+              <BidRow key={b.id} b={b} />
+            ))}
+          </div>
+        ) : (
+          <Empty title="No bids waiting" hint="Open a match and place one." />
+        )}
+      </div>
+
+      {rejected.length > 0 && (
+        <div>
+          <SectionTitle>Turned down — try again</SectionTitle>
+          <div className="flex flex-col gap-3">
+            {rejected.map((b) => (
+              <BidRow key={b.id} b={b} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -235,10 +398,111 @@ function RequirementForm({ onSaved }: { onSaved: () => void }) {
   );
 }
 
+/** Edit a requirement in place. The same controls as the create form, so a
+ *  small change never means making a second requirement. */
+function RequirementEditor({
+  requirement,
+  onSaved,
+}: {
+  requirement: Requirement;
+  onSaved: () => void;
+}) {
+  const [addressId, setAddressId] = useState<number | null>(requirement.address.id);
+  const [f, setF] = useState({
+    volume_t: requirement.volume_t,
+    min_purity_pct: requirement.min_purity_pct,
+    budget_per_t: requirement.budget_per_t,
+  });
+  const [caps, setCaps] = useState<Cap[]>(
+    requirement.caps.map((c) => ({ species: c.species, max_ppm: c.max_ppm })),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!addressId) return setError("Pick a delivery location.");
+    setBusy(true);
+    try {
+      await patch(`/requirements/${requirement.id}`, {
+        ...f,
+        address_id: addressId,
+        caps,
+      });
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="px-4 py-4">
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <AddressPicker
+            label="Delivery location"
+            value={addressId}
+            onChange={setAddressId}
+          />
+          <Field label="Volume needed (tonne)">
+            <input
+              type="number"
+              className={inputClass}
+              value={f.volume_t}
+              onChange={(e) => setF({ ...f, volume_t: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Minimum CO₂ purity (%)">
+            <input
+              type="number"
+              step="0.1"
+              className={inputClass}
+              value={f.min_purity_pct}
+              onChange={(e) =>
+                setF({ ...f, min_purity_pct: Number(e.target.value) })
+              }
+            />
+          </Field>
+          <Field
+            label="Budget (₹/tonne for the CO₂)"
+            hint="Haulage is quoted separately on every match"
+          >
+            <input
+              type="number"
+              className={inputClass}
+              value={f.budget_per_t}
+              onChange={(e) =>
+                setF({ ...f, budget_per_t: Number(e.target.value) })
+              }
+            />
+          </Field>
+        </div>
+
+        <ContaminantCaps caps={caps} setCaps={setCaps} />
+
+        {error && (
+          <p className="border-l-3 border-stop bg-stop-soft px-3 py-2 text-sm">
+            {error}
+          </p>
+        )}
+        <div className="flex gap-2">
+          <Button disabled={busy}>
+            {busy ? "Re-ranking…" : "Apply and re-rank"}
+          </Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
 /* --------------------------------------------------------------- matches */
 
 export function Matches() {
   const { id } = useParams();
+  const [editing, setEditing] = useState(false);
   const [data, setData] = useState<{
     requirement: Requirement;
     matches: Match[];
@@ -246,8 +510,11 @@ export function Matches() {
     count: number;
   } | null>(null);
 
+  const load = () => api<typeof data>(`/match/${id}`).then(setData);
+
   useEffect(() => {
-    api<typeof data>(`/match/${id}`).then(setData);
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   if (!data) return <p className="text-sm text-muted">Ranking the market…</p>;
@@ -259,12 +526,27 @@ export function Matches() {
         {inr(r.volume_t)} tonne into {r.address.city}
       </SectionTitle>
 
-      <p className="tnum text-sm text-muted">
-        min purity {r.min_purity_pct}% · up to ₹{inr(r.budget_per_t)}/t for the gas ·{" "}
-        {r.caps.length > 0
-          ? `limits ${r.caps.map((c) => `${c.species}≤${c.max_ppm}`).join(", ")}`
-          : "no contaminant limits"}
-      </p>
+      <div className="flex flex-wrap items-baseline gap-3">
+        <p className="tnum text-sm text-muted">
+          min purity {r.min_purity_pct}% · up to ₹{inr(r.budget_per_t)}/t for the gas ·{" "}
+          {r.caps.length > 0
+            ? `limits ${r.caps.map((c) => `${c.species}≤${c.max_ppm}`).join(", ")}`
+            : "no contaminant limits"}
+        </p>
+        <Button variant="ghost" onClick={() => setEditing(!editing)}>
+          {editing ? "Close filters" : "Change what you are looking for"}
+        </Button>
+      </div>
+
+      {editing && (
+        <RequirementEditor
+          requirement={r}
+          onSaved={() => {
+            setEditing(false);
+            load();
+          }}
+        />
+      )}
 
       {data.matches.length === 0 && (
         <Empty
@@ -704,7 +986,7 @@ function BidForm({
             onChange={(e) => setVolume(Number(e.target.value))}
           />
         </Field>
-        <Field label="Your price (₹/t ex-works)" hint={`Asking ₹${inr(listing.price_per_t)}`}>
+        <Field label="Your price (₹/tonne)" hint={`Asking ₹${inr(listing.price_per_t)}`}>
           <input
             type="number"
             className={inputClass}
@@ -738,39 +1020,12 @@ export function BuyerBids() {
   return (
     <div className="flex flex-col gap-4">
       <SectionTitle>My bids</SectionTitle>
-      {bids.length === 0 && <Empty title="No bids yet" hint="Open a match and place one." />}
+      {bids.length === 0 && (
+        <Empty title="No bids yet" hint="Open a match and place one." />
+      )}
       <div className="flex flex-col gap-3">
         {bids.map((b) => (
-          <Card key={b.id} className="px-4 py-3">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <span className="font-medium">{b.seller.name}</span>
-              <span className="text-xs text-muted">
-                listing #{b.listing.id} · {b.listing.purity_pct}% ·{" "}
-                {b.listing.city}
-              </span>
-              <Pill
-                tone={
-                  b.status === "accepted"
-                    ? "good"
-                    : b.status === "rejected"
-                      ? "stop"
-                      : "neutral"
-                }
-              >
-                {b.status}
-              </Pill>
-              <span className="tnum ml-auto text-sm">
-                {inr(b.volume_t)} t @ ₹{inr(b.price_per_t)}/t
-              </span>
-            </div>
-            {b.haul && (
-              <p className="tnum mt-1 text-xs text-muted">
-                {b.haul.truck} × {b.haul.trips} · {inr(b.distance_km)} km ·
-                delivered ₹{inr(b.delivered_per_t)}/t
-              </p>
-            )}
-            {b.note && <p className="mt-1 text-sm text-ink-2">“{b.note}”</p>}
-          </Card>
+          <BidRow key={b.id} b={b} />
         ))}
       </div>
     </div>
@@ -779,10 +1034,16 @@ export function BuyerBids() {
 
 export function OrdersPage({ seller = false }: { seller?: boolean }) {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [rejected, setRejected] = useState<Bid[]>([]);
   const load = () => api<{ orders: Order[] }>("/orders/mine").then((r) => setOrders(r.orders));
   useEffect(() => {
     load();
-  }, []);
+    if (!seller) {
+      api<{ bids: Bid[] }>("/bids/mine").then((r) =>
+        setRejected(r.bids.filter((b) => b.status === "rejected")),
+      );
+    }
+  }, [seller]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -800,6 +1061,19 @@ export function OrdersPage({ seller = false }: { seller?: boolean }) {
           <OrderCard key={o.id} o={o} onChange={load} />
         ))}
       </div>
+
+      {rejected.length > 0 && (
+        <div className="mt-2">
+          <SectionTitle right={`${rejected.length} turned down`}>
+            Bids that did not become orders
+          </SectionTitle>
+          <div className="flex flex-col gap-3">
+            {rejected.map((b) => (
+              <BidRow key={b.id} b={b} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -231,26 +231,28 @@ export function AddressPicker({
   return (
     <div className="flex flex-col gap-1">
       <Label>{label}</Label>
-      <div className="flex gap-2">
-        <select
-          className={`${inputClass} flex-1`}
-          value={value ?? ""}
-          onChange={(e) => onChange(Number(e.target.value))}
-        >
-          <option value="" disabled>
-            Select a site…
+      <select
+        className={`${inputClass} w-full`}
+        value={value ?? ""}
+        onChange={(e) => onChange(Number(e.target.value))}
+      >
+        <option value="" disabled>
+          Select a site…
+        </option>
+        {addresses.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.label} — {a.city}
+            {a.is_default ? " (default)" : ""}
           </option>
-          {addresses.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.label} — {a.city}
-              {a.is_default ? " (default)" : ""}
-            </option>
-          ))}
-        </select>
-        <Button variant="ghost" type="button" onClick={() => setOpen(true)}>
-          + Add new address
-        </Button>
-      </div>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="self-start text-xs text-accent underline"
+      >
+        + Add a new address
+      </button>
       {open && (
         <AddAddressModal
           onClose={() => setOpen(false)}

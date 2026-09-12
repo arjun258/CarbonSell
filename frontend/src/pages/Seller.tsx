@@ -38,6 +38,80 @@ export function SellerOverview() {
     <div className="flex flex-col gap-6">
       <KpiRow kpis={d.kpis} />
 
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div>
+          <SectionTitle
+            right={<Link to="/orders" className="text-accent underline">All orders</Link>}
+          >
+            Approved orders
+          </SectionTitle>
+          {d.orders.length ? (
+            <div className="flex flex-col gap-3">
+              {d.orders.map((o) => (
+                <Card key={o.id} className="px-4 py-3">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="font-mono text-xs text-muted">#{o.id}</span>
+                    <span className="font-medium">{o.counterpart.name}</span>
+                    <Pill tone={o.status === "delivered" ? "good" : "warn"}>
+                      {o.status.replace("_", " ")}
+                    </Pill>
+                    <span className="tnum ml-auto text-sm">
+                      {inr(o.volume_t)} tonne · ₹{inr(o.total_value)}
+                    </span>
+                  </div>
+                  <p className="tnum mt-1 text-xs text-muted">
+                    {o.pickup
+                      ? `pickup ${o.pickup.scheduled_date}, ${o.pickup.slot}`
+                      : "needs a pickup date"}
+                  </p>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Empty title="No orders yet" hint="Accept a bid and it lands here." />
+          )}
+        </div>
+
+        <div>
+          <SectionTitle
+            right={<Link to="/messages" className="text-accent underline">All messages</Link>}
+          >
+            Conversations
+          </SectionTitle>
+          {d.threads.length ? (
+            <div className="flex flex-col gap-3">
+              {d.threads.map((t) => (
+                <Card key={t.id} className="px-4 py-3">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="font-medium">{t.counterpart.name}</span>
+                    <Pill tone={t.contact_shared ? "good" : "neutral"}>
+                      {t.contact_shared ? "number shared" : "number hidden"}
+                    </Pill>
+                    <span className="tnum ml-auto text-xs text-muted">
+                      {t.message_count} message{t.message_count === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <p className="mt-1 truncate text-sm text-ink-2">
+                    {t.last_message || "No messages yet"}
+                  </p>
+                  <Link
+                    to="/messages"
+                    className="mt-1 inline-block text-xs text-accent underline"
+                  >
+                    Open →
+                  </Link>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Empty
+              title="No conversations"
+              hint="Buyers start these from your listings."
+            />
+          )}
+        </div>
+      </div>
+
       <div>
         <SectionTitle
           right={<Link to="/listings/new" className="text-accent underline">+ New listing</Link>}
@@ -210,25 +284,23 @@ export function NewListing() {
               />
               <div className="flex flex-col gap-1">
                 <Label>Captured by</Label>
-                <div className="flex gap-2">
-                  <select
-                    className={`${inputClass} flex-1`}
-                    value={f.source_type}
-                    onChange={(e) => setF({ ...f, source_type: e.target.value })}
-                  >
-                    <option value="">Select…</option>
-                    {(me?.capture_methods ?? []).map((m) => (
-                      <option key={m}>{m}</option>
-                    ))}
-                  </select>
-                  <Button
-                    variant="ghost"
-                    type="button"
-                    onClick={() => setMethodOpen(true)}
-                  >
-                    + Add new method
-                  </Button>
-                </div>
+                <select
+                  className={`${inputClass} w-full`}
+                  value={f.source_type}
+                  onChange={(e) => setF({ ...f, source_type: e.target.value })}
+                >
+                  <option value="">Select…</option>
+                  {(me?.capture_methods ?? []).map((m) => (
+                    <option key={m}>{m}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setMethodOpen(true)}
+                  className="self-start text-xs text-accent underline"
+                >
+                  + Add a new capture method
+                </button>
               </div>
               <Field label="Volume available (tonne)">
                 <input

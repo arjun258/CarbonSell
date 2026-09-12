@@ -172,6 +172,7 @@ export type Order = {
 export type Bid = {
   id: number;
   status: string;
+  requirement_id: number;
   note: string;
   volume_t: number;
   price_per_t: number;
@@ -199,7 +200,9 @@ export type Dashboard = {
   role: string;
   kpis: Kpi[];
   best_matches?: Match[];
-  unread_threads: number;
+  orders: Order[];
+  bids: Bid[];
+  threads: Thread[];
 };
 
 export type HaulSuggestion = {

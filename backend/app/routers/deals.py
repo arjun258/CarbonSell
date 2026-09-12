@@ -67,6 +67,7 @@ def my_bids(user: User = Depends(current_user), db: Session = Depends(get_db)):
         ev = evaluate(supply_from_listing(listing), demand_from_requirement(req))
         out.append({
             "id": b.id, "status": b.status, "note": b.note,
+            "requirement_id": b.requirement_id,
             "volume_t": b.volume_t, "price_per_t": b.price_per_t,
             "created_at": b.created_at.isoformat(),
             "listing": {

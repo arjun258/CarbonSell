@@ -210,6 +210,60 @@ def create_requirement(
     return requirement_out(req)
 
 
+@router.patch("/requirements/{requirement_id}")
+def update_requirement(
+    requirement_id: int,
+    body: RequirementIn,
+    user: User = Depends(require_role("buyer")),
+    db: Session = Depends(get_db),
+):
+    """Edit a requirement in place. Changing what you are looking for should
+    not mean creating a second requirement."""
+    req = db.get(Requirement, requirement_id)
+    if req is None or req.company_id != user.company_id:
+        raise HTTPException(404, "No such requirement")
+
+    address = db.get(Address, body.address_id)
+    if address is None or address.company_id != user.company_id:
+        raise HTTPException(400, "That delivery address does not belong to you")
+
+    req.address_id = address.id
+    req.volume_t = body.volume_t
+    req.min_purity_pct = body.min_purity_pct
+    req.budget_per_t = body.budget_per_t
+
+    for cap in list(req.caps):
+        db.delete(cap)
+    db.flush()
+    known = {sp["code"] for sp in config.SPECIES}
+    for c in body.caps:
+        if c.species not in known:
+            raise HTTPException(400, f"Unknown species: {c.species}")
+        db.add(ContaminantCap(requirement_id=req.id, species=c.species, max_ppm=c.max_ppm))
+
+    db.commit()
+    db.refresh(req)
+    return requirement_out(req)
+
+
+@router.delete("/requirements/{requirement_id}")
+def delete_requirement(
+    requirement_id: int,
+    user: User = Depends(require_role("buyer")),
+    db: Session = Depends(get_db),
+):
+    req = db.get(Requirement, requirement_id)
+    if req is None or req.company_id != user.company_id:
+        raise HTTPException(404, "No such requirement")
+    from ..models import Bid
+
+    if db.query(Bid).filter(Bid.requirement_id == req.id).count():
+        raise HTTPException(409, "This requirement already has bids against it")
+    db.delete(req)
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/match/{requirement_id}")
 def match(
     requirement_id: int,
