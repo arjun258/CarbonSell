@@ -118,6 +118,11 @@ export function Login() {
             Passwords are bcrypt-hashed in our own database. The session is a
             24-hour JWT.
           </p>
+          <p className="mt-2 border-l-3 border-cool bg-cool-soft px-3 py-2 text-xs text-ink-2">
+            Each browser tab keeps its own session. Open a second tab at{" "}
+            <span className="font-mono">localhost:5173</span> and sign in there
+            as the other side to watch a deal from both ends at once.
+          </p>
         </Card>
       </div>
     </Shell>

@@ -10,13 +10,22 @@ export type Health = {
   ola_configured: boolean;
 };
 
+/** Sessions are per tab, not per browser.
+ *
+ *  localStorage is shared by every tab on the origin, so signing in as a
+ *  seller in one tab signed the buyer out of the other. sessionStorage is
+ *  scoped to the tab, which lets both sides of a deal be open side by side
+ *  - the whole point of a two-sided marketplace demo. A session lasts until
+ *  its tab closes; a reload keeps it. */
 export function token(): string | null {
-  return localStorage.getItem("token");
+  return sessionStorage.getItem("token");
 }
 
 export function setToken(t: string | null) {
-  if (t) localStorage.setItem("token", t);
-  else localStorage.removeItem("token");
+  if (t) sessionStorage.setItem("token", t);
+  else sessionStorage.removeItem("token");
+  // Clear the old shared key so an existing login does not leak across tabs.
+  localStorage.removeItem("token");
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
