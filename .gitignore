@@ -16,3 +16,6 @@ dist/
 
 # os
 .DS_Store
+
+# stray scratch files
+k.py
