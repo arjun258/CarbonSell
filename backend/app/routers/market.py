@@ -7,7 +7,7 @@ from ..db import get_db
 from ..engine import Demand, evaluate, rank
 from ..loaders import active_supplies, demand_from_requirement, supply_from_listing
 from ..models import Address, Contaminant, ContaminantCap, Listing, Requirement, Thread, User
-from ..auction import bidding_block, is_auction, settle_if_due, window_state
+from ..auction import bidding_block, is_auction, parse_moment, settle_if_due, window_state
 from ..schemas import (
     ListingIn, ListingPatch, RequirementIn, company_out, listing_out,
     requirement_out,
@@ -15,6 +15,12 @@ from ..schemas import (
 from ..security import current_user, require_role
 
 router = APIRouter(tags=["market"])
+
+
+def _check_window(start: str, end: str) -> None:
+    opens, closes = parse_moment(start), parse_moment(end, end_of_day=True)
+    if opens and closes and closes <= opens:
+        raise HTTPException(400, "Bidding has to close after it opens")
 
 
 def _reveal_for(db: Session, listing: Listing, user: User | None) -> bool:
@@ -134,8 +140,7 @@ def create_listing(
     if not 0 < body.purity_pct <= 100:
         raise HTTPException(400, "Purity must be between 0 and 100")
 
-    if body.bid_start and body.bid_end and body.bid_end < body.bid_start:
-        raise HTTPException(400, "Bidding cannot close before it opens")
+    _check_window(body.bid_start, body.bid_end)
 
     listing = Listing(
         company_id=user.company_id, address_id=address.id, volume_t=body.volume_t,
@@ -177,8 +182,7 @@ def update_listing(
         if value is not None:
             setattr(listing, field, value)
 
-    if listing.bid_start and listing.bid_end and listing.bid_end < listing.bid_start:
-        raise HTTPException(400, "Bidding cannot close before it opens")
+    _check_window(listing.bid_start, listing.bid_end)
     if body.bidding_closed is False:
         listing.settled = False
 

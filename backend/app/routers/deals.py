@@ -6,7 +6,10 @@ from sqlalchemy.orm import Session
 
 from .. import config
 from ..db import get_db
-from ..auction import accepted_volume, bidding_block, listing_bids, settle_if_due, window_state
+from ..auction import (
+    accepted_volume, bidding_block, listing_bids, parse_moment, settle_if_due,
+    window_state,
+)
 from ..engine import cheapest_haul, evaluate
 from ..loaders import demand_from_requirement, supply_from_listing
 from ..models import Address, Bid, Listing, Order, Pickup, Requirement, User
@@ -35,7 +38,9 @@ def place_bid(
     settle_if_due(db, listing)
     state = window_state(listing)
     if state == "upcoming":
-        raise HTTPException(409, f"Bidding on this listing opens on {listing.bid_start}")
+        opens = parse_moment(listing.bid_start)
+        when = opens.strftime("%-d %b at %H:%M") if opens else listing.bid_start
+        raise HTTPException(409, f"Bidding on this listing opens {when}")
     if state == "closed":
         raise HTTPException(409, "Bidding on this listing has closed")
     if body.price_per_t < listing.price_per_t:

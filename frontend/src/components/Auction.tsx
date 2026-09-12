@@ -2,23 +2,53 @@ import { inr } from "../api";
 import { Label, Pill } from "../ui";
 import type { Bidding } from "../types";
 
+/** "19 Sep 2026, 5:00 pm" — a bare date renders as the whole day. */
+export function moment(value: string): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const day = d.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  return value.includes("T")
+    ? `${day}, ${d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`
+    : day;
+}
+
+/** How long is left, in the largest unit that still says something useful. */
+export function countdown(minutes: number): string {
+  if (minutes <= 0) return "closing now";
+  if (minutes < 60) return `${minutes} min left`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    const rest = minutes % 60;
+    return rest ? `${hours}h ${rest}m left` : `${hours}h left`;
+  }
+  const days = Math.floor(hours / 24);
+  const rest = hours % 24;
+  return rest ? `${days}d ${rest}h left` : `${days} day${days === 1 ? "" : "s"} left`;
+}
+
 export function windowLabel(b: Bidding): string {
   if (b.mode === "direct") return "Direct sale — no bidding window";
-  if (b.state === "upcoming") return `Bidding opens ${b.start}`;
+  if (b.state === "upcoming") return `Bidding opens ${moment(b.start)}`;
   if (b.state === "open") {
-    const d = b.closes_in_days;
-    return d === 0
-      ? `Bidding closes today, ${b.end}`
-      : `Bidding closes ${b.end} · ${d} day${d === 1 ? "" : "s"} left`;
+    const left = b.closes_in_minutes;
+    return left === null
+      ? `Bidding closes ${moment(b.end)}`
+      : `Closes ${moment(b.end)} · ${countdown(left)}`;
   }
   if (b.closed_by_seller) return "The seller stopped accepting bids";
-  return `Bidding closed ${b.end}`;
+  return `Bidding closed ${moment(b.end)}`;
 }
 
 export function StateChip({ b }: { b: Bidding }) {
   if (b.mode === "direct") return <Pill>direct sale</Pill>;
   if (b.state === "open") return <Pill tone="good">bidding open</Pill>;
-  if (b.state === "upcoming") return <Pill tone="warn">opens {b.start}</Pill>;
+  if (b.state === "upcoming")
+    return <Pill tone="warn">opens {moment(b.start)}</Pill>;
   return <Pill tone="stop">bidding closed</Pill>;
 }
 

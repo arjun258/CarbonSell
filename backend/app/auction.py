@@ -8,26 +8,50 @@ There is no scheduler. A listing past its end date settles the moment
 anyone loads it, which is honest enough without a background worker.
 """
 import json
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from .models import Bid, Listing, Order
 
 
-def today() -> str:
-    return date.today().isoformat()
+def now() -> str:
+    """Local wall-clock, to the minute - the precision a seller sets."""
+    return datetime.now().isoformat(timespec="minutes")
+
+
+def parse_moment(value: str, *, end_of_day: bool = False) -> datetime | None:
+    """Accepts '2026-09-19T14:30' and plain '2026-09-19'.
+
+    A bare date means the whole of that day, so an end date without a time
+    runs until 23:59 rather than expiring at midnight.
+    """
+    if not value:
+        return None
+    if "T" in value:
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    try:
+        day = date.fromisoformat(value)
+    except ValueError:
+        return None
+    return datetime.combine(
+        day,
+        datetime.max.time().replace(microsecond=0) if end_of_day else datetime.min.time(),
+    )
 
 
 def is_auction(listing: Listing) -> bool:
     return bool(listing.bid_start and listing.bid_end)
 
 
-def days_between(a: str, b: str) -> int | None:
-    try:
-        return (date.fromisoformat(b) - date.fromisoformat(a)).days
-    except ValueError:
+def minutes_until(value: str) -> int | None:
+    moment = parse_moment(value, end_of_day=True)
+    if moment is None:
         return None
+    return int((moment - datetime.now()).total_seconds() // 60)
 
 
 def window_state(listing: Listing) -> str:
@@ -36,10 +60,13 @@ def window_state(listing: Listing) -> str:
         return "direct"
     if listing.bidding_closed or listing.settled:
         return "closed"
-    now = today()
-    if now < listing.bid_start:
+
+    moment = datetime.now()
+    opens = parse_moment(listing.bid_start)
+    closes = parse_moment(listing.bid_end, end_of_day=True)
+    if opens is not None and moment < opens:
         return "upcoming"
-    if now > listing.bid_end:
+    if closes is not None and moment > closes:
         return "closed"
     return "open"
 
@@ -115,7 +142,7 @@ def settle_if_due(db: Session, listing: Listing) -> list[Bid]:
     award automatically picks winners; the rest simply stop taking bids."""
     if not is_auction(listing) or listing.settled:
         return []
-    if today() <= listing.bid_end and not listing.bidding_closed:
+    if window_state(listing) != "closed":
         return []
 
     won: list[Bid] = []
@@ -156,7 +183,9 @@ def bidding_block(db: Session, listing: Listing, viewer_company_id: int | None) 
         "lowest": min(prices) if prices else None,
         "accepted_t": round(taken, 2),
         "remaining_t": round(max(0.0, listing.volume_t - taken), 2),
-        "closes_in_days": days_between(today(), listing.bid_end) if is_auction(listing) else None,
+        "opens_at": listing.bid_start,
+        "closes_at": listing.bid_end,
+        "closes_in_minutes": minutes_until(listing.bid_end) if is_auction(listing) else None,
         "my_bids": [
             {
                 "id": b.id,

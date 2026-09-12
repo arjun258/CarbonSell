@@ -5,7 +5,7 @@ the same 25 scattered across India looks like an empty product.
 
 Run:  python -m app.seed
 """
-from datetime import date, timedelta
+from datetime import datetime, timedelta
 
 from . import config
 from .db import Base, SessionLocal, engine
@@ -125,10 +125,13 @@ REQUIREMENTS = [
 
 
 def window(open_in: int, days: int) -> tuple[str, str]:
-    """A bidding window relative to today, so the demo always has live
-    auctions no matter when it is seeded."""
-    start = date.today() + timedelta(days=open_in)
-    return start.isoformat(), (start + timedelta(days=days)).isoformat()
+    """A bidding window relative to now, so the demo always has live auctions
+    no matter when it is seeded. Windows open at 09:00 and close at 17:00."""
+    start = (datetime.now() + timedelta(days=open_in)).replace(
+        hour=9, minute=0, second=0, microsecond=0
+    )
+    end = (start + timedelta(days=days)).replace(hour=17, minute=0)
+    return start.isoformat(timespec="minutes"), end.isoformat(timespec="minutes")
 
 
 # index -> (opens in N days, runs for N days, auto-award at the close)

@@ -59,7 +59,9 @@ export type Bidding = {
   lowest: number | null;
   accepted_t: number;
   remaining_t: number;
-  closes_in_days: number | null;
+  opens_at: string;
+  closes_at: string;
+  closes_in_minutes: number | null;
   my_bids: {
     id: number;
     volume_t: number;

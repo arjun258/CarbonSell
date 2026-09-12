@@ -18,7 +18,20 @@ import {
   SectionTitle,
   inputClass,
 } from "../ui";
-import { BiddingPanel, StateChip, windowLabel } from "../components/Auction";
+import {
+  BiddingPanel,
+  StateChip,
+  moment,
+  windowLabel,
+} from "../components/Auction";
+
+/** A value a <input type="datetime-local"> accepts, in local time. */
+function localInput(d: Date, hour?: number, minute?: number): string {
+  const x = new Date(d);
+  if (hour !== undefined) x.setHours(hour, minute ?? 0, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}T${pad(x.getHours())}:${pad(x.getMinutes())}`;
+}
 import type { Bid, Bidding, Dashboard, Listing, ListingBid } from "../types";
 
 /* -------------------------------------------------------------- overview */
@@ -317,8 +330,8 @@ export function NewListing() {
     source_type: me?.capture_methods[0] ?? "",
     lab_report: "",
     storage_full: false,
-    bid_start: new Date().toISOString().slice(0, 10),
-    bid_end: new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10),
+    bid_start: localInput(new Date()),
+    bid_end: localInput(new Date(Date.now() + 7 * 864e5), 17, 0),
     auto_award: true,
   });
   const [auction, setAuction] = useState(true);
@@ -476,7 +489,7 @@ export function NewListing() {
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <Field label="Bidding opens">
                       <input
-                        type="date"
+                        type="datetime-local"
                         className={inputClass}
                         value={f.bid_start}
                         onChange={(e) => setF({ ...f, bid_start: e.target.value })}
@@ -484,7 +497,7 @@ export function NewListing() {
                     </Field>
                     <Field label="Bidding closes">
                       <input
-                        type="date"
+                        type="datetime-local"
                         className={inputClass}
                         value={f.bid_end}
                         onChange={(e) => setF({ ...f, bid_end: e.target.value })}
@@ -554,7 +567,7 @@ export function NewListing() {
             </p>
             {auction && (
               <p className="mt-1 text-xs text-muted">
-                bidding {f.bid_start} → {f.bid_end}
+                bidding {moment(f.bid_start)} → {moment(f.bid_end)}
                 {f.auto_award ? " · awards automatically" : ""}
               </p>
             )}
@@ -786,7 +799,7 @@ function WindowEditor({
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Bidding opens">
             <input
-              type="date"
+              type="datetime-local"
               className={inputClass}
               value={f.bid_start}
               onChange={(e) => setF({ ...f, bid_start: e.target.value })}
@@ -794,7 +807,7 @@ function WindowEditor({
           </Field>
           <Field label="Bidding closes">
             <input
-              type="date"
+              type="datetime-local"
               className={inputClass}
               value={f.bid_end}
               onChange={(e) => setF({ ...f, bid_end: e.target.value })}
