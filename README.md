@@ -113,11 +113,6 @@ Nothing needs enabling per API.
 Ola Maps powers two things: address autocomplete on signup and the address
 picker, and the road distance behind every delivered price.
 
-The key never reaches the browser — the frontend calls `/geo/autocomplete` and
-`/geo/distance` on this API, which proxies to Ola.
-
-Lookups persist to `backend/distance_cache.json`, so a restart never waits on
-the network. Precompute every pickup-to-delivery pair once (about a minute):
 
 ```bash
 cd backend && ../.venv/bin/python -m scripts.warm_distances
