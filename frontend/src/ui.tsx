@@ -184,7 +184,14 @@ const FIT_LABELS: Record<string, string> = {
 
 export function ScoreBars({ fits }: { fits: Record<string, number> }) {
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-baseline gap-2">
+        <Label>Feasibility score</Label>
+        <span className="text-xs text-muted">
+          how this match compares with the rest of the market
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
       {Object.entries(fits).map(([k, v]) => (
         <div key={k} className="flex items-center gap-2">
           <span className="w-16 font-mono text-[10px] tracking-wider text-muted uppercase">
@@ -201,6 +208,7 @@ export function ScoreBars({ fits }: { fits: Record<string, number> }) {
           </span>
         </div>
       ))}
+      </div>
     </div>
   );
 }
