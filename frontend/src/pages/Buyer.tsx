@@ -70,7 +70,7 @@ export function BuyerOverview() {
                 </div>
                 <p className="tnum mt-1 text-sm text-muted">
                   {m.purity_pct}% · {m.address_line} ·{" "}
-                  {inr(m.distance_km)} km · score {m.score}
+                  {inr(m.distance_km)} km · feasibility {m.score}
                 </p>
                 <Link
                   to={`/requirements/${m.requirement_id}/matches`}
@@ -252,10 +252,6 @@ export function Matches() {
 
   if (!data) return <p className="text-sm text-muted">Ranking the market…</p>;
   const r = data.requirement;
-  const purest = data.matches.reduce<Match | null>(
-    (best, m) => (!best || m.purity_pct > best.purity_pct ? m : best),
-    null,
-  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -269,19 +265,6 @@ export function Matches() {
           ? `limits ${r.caps.map((c) => `${c.species}≤${c.max_ppm}`).join(", ")}`
           : "no contaminant limits"}
       </p>
-
-      {purest && data.matches[0] && purest.listing_id !== data.matches[0].listing_id && (
-        <div className="border-l-3 border-cool bg-cool-soft px-4 py-3 text-sm">
-          The top match is <strong>not</strong> the purest gas available. At{" "}
-          {purest.purity_pct}%, {purest.seller_name} costs{" "}
-          <strong className="tnum">
-            ₹{inr(purest.delivered_per_t - data.matches[0].delivered_per_t)}/tonne
-            more
-          </strong>{" "}
-          delivered, because it sits {inr(purest.distance_km)} km away against{" "}
-          {inr(data.matches[0].distance_km)} km. Haulage decides this market.
-        </div>
-      )}
 
       {data.matches.length === 0 && (
         <Empty
@@ -327,8 +310,13 @@ function MatchCard({
               ₹{inr(m.total_cost)} for {inr(m.covers_t)} tonne
             </span>
           </span>
-          <span className="tnum border border-accent px-2 py-0.5 font-mono text-sm text-accent">
-            {m.score}
+          <span className="flex flex-col items-center">
+            <span className="font-mono text-[9px] tracking-[0.1em] text-muted uppercase">
+              Feasibility
+            </span>
+            <span className="tnum border border-accent px-2 py-0.5 font-mono text-sm text-accent">
+              {m.score}
+            </span>
           </span>
         </span>
       </div>
