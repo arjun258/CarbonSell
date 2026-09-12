@@ -106,46 +106,52 @@ export function BuyerOverview() {
         <SectionTitle
           right={
             <Link to="/requirements" className="text-accent underline">
-              All requirements
+              Manage requirements
             </Link>
           }
         >
-          Best matches right now
+          My requirements
         </SectionTitle>
-        {d.best_matches?.length ? (
-          <div className="flex flex-col gap-3">
-            {d.best_matches.map((m) => (
-              <Card key={`${m.requirement_id}-${m.listing_id}`} className="px-4 py-3">
+        {d.requirements?.length ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            {d.requirements.map((r) => (
+              <Card key={r.id} className="flex flex-col gap-2 px-4 py-3">
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="font-medium">{m.seller_name}</span>
-                  <Pill>{m.city}</Pill>
-                  <span className="tnum ml-auto text-right">
-                    <span className="text-lg font-semibold">
-                      ₹{inr(m.delivered_per_t)}
-                    </span>
-                    <span className="text-xs font-normal text-muted">/t delivered</span>
-                    <span className="block text-xs text-muted">
-                      ₹{inr(m.total_cost)} total
-                    </span>
+                  <span className="font-medium">
+                    {inr(r.volume_t)} tonne into {r.address.city}
                   </span>
+                  <Pill tone={r.match_count ? "good" : "stop"}>
+                    {r.match_count ?? 0} match{r.match_count === 1 ? "" : "es"}
+                  </Pill>
                 </div>
-                <p className="tnum mt-1 text-sm text-muted">
-                  {m.purity_pct}% · {m.address_line} · {inr(m.distance_km)} km ·
-                  feasibility {m.score}
+                <p className="tnum text-sm text-muted">
+                  min {r.min_purity_pct}% · up to ₹{inr(r.budget_per_t)}/t for the
+                  gas · {r.address.label}
                 </p>
-                <Link
-                  to={`/requirements/${m.requirement_id}/matches`}
-                  className="mt-2 inline-block text-sm text-accent underline"
-                >
-                  See the ranking →
+                <p className="tnum text-sm text-muted">
+                  {r.caps.length > 0
+                    ? `limits ${r.caps.map((c) => `${c.species} ≤ ${c.max_ppm} ppm`).join(" · ")}`
+                    : "no contaminant limits"}
+                </p>
+                {r.best_delivered_per_t != null && (
+                  <p className="tnum text-sm">
+                    best delivered{" "}
+                    <strong className="font-semibold">
+                      ₹{inr(r.best_delivered_per_t)}
+                    </strong>
+                    /t
+                  </p>
+                )}
+                <Link to={`/requirements/${r.id}/matches`} className="mt-auto pt-1">
+                  <Button className="w-full">Open this requirement</Button>
                 </Link>
               </Card>
             ))}
           </div>
         ) : (
           <Empty
-            title="No matches yet"
-            hint="Create a requirement and the platform will rank every seller in your region."
+            title="No requirements yet"
+            hint="Tell us what you need and every seller in your region gets ranked by delivered cost."
           />
         )}
       </div>

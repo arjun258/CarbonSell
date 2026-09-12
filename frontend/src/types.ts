@@ -75,6 +75,7 @@ export type Requirement = {
   budget_per_t: number;
   caps: { species: string; max_ppm: number }[];
   match_count?: number;
+  best_delivered_per_t?: number | null;
 };
 
 export type Haul = {
@@ -199,7 +200,7 @@ export type Kpi = { label: string; value: number; unit?: string };
 export type Dashboard = {
   role: string;
   kpis: Kpi[];
-  best_matches?: Match[];
+  requirements?: Requirement[];
   orders: Order[];
   bids: Bid[];
   threads: Thread[];

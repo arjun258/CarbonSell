@@ -64,15 +64,21 @@ def dashboard(user: User = Depends(current_user), db: Session = Depends(get_db))
             **common,
         }
 
-    reqs = db.query(Requirement).filter(Requirement.company_id == cid).all()
-    best: list[dict] = []
+    from ..schemas import requirement_out
+
+    reqs = (
+        db.query(Requirement)
+        .filter(Requirement.company_id == cid)
+        .order_by(Requirement.id.desc())
+        .all()
+    )
+    requirements = []
     for r in reqs:
+        item = requirement_out(r)
         matches = rank(active_supplies(db, r.address.region), demand_from_requirement(r))
-        for m in matches[:2]:
-            m["requirement_id"] = r.id
-            m["use_case"] = r.address.city
-            best.append(m)
-    best.sort(key=lambda m: -m["score"])
+        item["match_count"] = len(matches)
+        item["best_delivered_per_t"] = matches[0]["delivered_per_t"] if matches else None
+        requirements.append(item)
 
     return {
         "role": "buyer",
@@ -84,6 +90,6 @@ def dashboard(user: User = Depends(current_user), db: Session = Depends(get_db))
              "value": sum(1 for o in orders if o.status != "delivered")},
             {"label": "Conversations", "value": len(threads)},
         ],
-        "best_matches": best[:3],
+        "requirements": requirements,
         **common,
     }
