@@ -20,6 +20,7 @@ import {
   Requirements,
 } from "./pages/Buyer";
 import {
+  ListingBids,
   NewListing,
   SellerBids,
   SellerListings,
@@ -148,6 +149,7 @@ function AppShell() {
               <>
                 <Route path="/listings" element={<SellerListings />} />
                 <Route path="/listings/new" element={<NewListing />} />
+                <Route path="/listings/:id/bids" element={<ListingBids />} />
                 <Route path="/bids" element={<SellerBids />} />
               </>
             ) : (

@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { AddressPicker } from "../components/AddressPicker";
 import { ContaminantCaps, type Cap } from "../components/Contaminants";
 import { ChatPanel } from "../components/ChatPanel";
+import { BiddingPanel, StateChip, windowLabel } from "../components/Auction";
 import {
   Button,
   Card,
@@ -757,19 +758,30 @@ export function Browse() {
           const ev = l.evaluation;
           return (
             <Card key={l.id} className="px-4 py-3">
-              <div className="flex items-baseline gap-2">
+              <div className="flex flex-wrap items-baseline gap-2">
                 <span className="font-medium">{l.seller.name}</span>
                 {l.seller.is_verified && <Pill tone="good">✓</Pill>}
                 {l.storage_full && <Pill tone="warn">urgent</Pill>}
+                {l.bidding && <StateChip b={l.bidding} />}
                 <span className="tnum ml-auto text-sm">
                   ₹{inr(l.price_per_t)}
-                  <span className="text-xs text-muted">/t for the gas</span>
+                  <span className="text-xs text-muted">
+                    /t {l.bidding?.mode === "auction" ? "starting" : "for the gas"}
+                  </span>
                 </span>
               </div>
               <p className="tnum mt-1 text-sm text-muted">
                 {l.purity_pct}% purity · {inr(l.volume_t)} tonne available ·{" "}
                 {l.form} · {l.source_type}
               </p>
+              {l.bidding?.mode === "auction" && (
+                <p className="tnum mt-1 text-xs text-muted">
+                  {windowLabel(l.bidding)} · {l.bidding.bid_count} bid
+                  {l.bidding.bid_count === 1 ? "" : "s"}
+                  {l.bidding.highest !== null &&
+                    ` · highest ₹${inr(l.bidding.highest)}/t`}
+                </p>
+              )}
               <p className="mt-0.5 text-xs text-muted">
                 {[l.address.line1, l.address.city, l.address.state, l.address.pincode]
                   .filter(Boolean)
@@ -867,6 +879,8 @@ export function ListingDetail() {
         {l.purity_pct}% CO₂ · {inr(l.volume_t)} tonne · {l.address.city}
       </SectionTitle>
 
+      {l.bidding && <BiddingPanel b={l.bidding} />}
+
       <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
         <div className="flex flex-col gap-4">
           {l.evaluation && (
@@ -920,11 +934,21 @@ export function ListingDetail() {
               <Button variant="ghost" onClick={openChat}>
                 Message seller
               </Button>
-              {l.requirement && (
-                <Button onClick={() => setBidOpen(!bidOpen)}>
-                  {bidOpen ? "Close" : "Place bid"}
-                </Button>
-              )}
+              {l.requirement &&
+                (l.bidding && l.bidding.state === "closed" ? (
+                  <p className="border-l-3 border-rule-strong bg-surface-2 px-3 py-2 text-sm text-muted">
+                    {windowLabel(l.bidding)} — no more bids are being taken.
+                  </p>
+                ) : l.bidding && l.bidding.state === "upcoming" ? (
+                  <p className="border-l-3 border-accent bg-accent-soft px-3 py-2 text-sm">
+                    {windowLabel(l.bidding)}. Message the seller in the
+                    meantime.
+                  </p>
+                ) : (
+                  <Button onClick={() => setBidOpen(!bidOpen)}>
+                    {bidOpen ? "Close" : "Place bid"}
+                  </Button>
+                ))}
             </div>
           </Card>
 
@@ -956,10 +980,13 @@ function BidForm({
   requirementId: number;
   onDone: () => void;
 }) {
+  const b = listing.bidding;
+  const onOffer = b ? b.remaining_t : listing.volume_t;
+  const floor = b?.starting_price ?? listing.price_per_t;
   const [volume, setVolume] = useState(
-    Math.min(listing.volume_t, listing.requirement?.volume_t ?? listing.volume_t),
+    Math.min(onOffer, listing.requirement?.volume_t ?? onOffer),
   );
-  const [price, setPrice] = useState(listing.price_per_t);
+  const [price, setPrice] = useState(b?.highest ?? floor);
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -984,15 +1011,25 @@ function BidForm({
     <Card className="px-4 py-3">
       <form onSubmit={submit} className="flex flex-col gap-3">
         <Label>Place a bid</Label>
-        <Field label="Volume (t)">
+        <Field label="Volume (tonne)" hint={`${inr(onOffer)} tonne on offer`}>
           <input
             type="number"
+            max={onOffer}
             className={inputClass}
             value={volume}
             onChange={(e) => setVolume(Number(e.target.value))}
           />
         </Field>
-        <Field label="Your price (₹/tonne)" hint={`Asking ₹${inr(listing.price_per_t)}`}>
+        <Field
+          label="Your price (₹/tonne)"
+          hint={
+            b && b.mode === "auction"
+              ? b.highest !== null
+                ? `Starting price ₹${inr(floor)} · highest bid so far ₹${inr(b.highest)}`
+                : `Starting price ₹${inr(floor)} — no bids yet`
+              : `Asking ₹${inr(listing.price_per_t)}`
+          }
+        >
           <input
             type="number"
             className={inputClass}

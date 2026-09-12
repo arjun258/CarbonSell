@@ -80,6 +80,14 @@ class Listing(Base):
     lab_report: Mapped[str] = mapped_column(String(160), default="")
     storage_full: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(20), default="active")
+    # Bidding. Empty dates mean a direct sale: buyers bid, the seller accepts,
+    # no window and no competition on screen. price_per_t doubles as the
+    # starting price - the floor a bid has to clear.
+    bid_start: Mapped[str] = mapped_column(String(20), default="")
+    bid_end: Mapped[str] = mapped_column(String(20), default="")
+    bidding_closed: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_award: Mapped[bool] = mapped_column(Boolean, default=False)
+    settled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
 
     company: Mapped[Company] = relationship()

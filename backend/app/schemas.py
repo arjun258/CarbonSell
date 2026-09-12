@@ -47,12 +47,25 @@ class ListingIn(BaseModel):
     volume_t: float
     purity_pct: float
     form: str = "liquid"
-    price_per_t: float
+    price_per_t: float            # the starting price when bidding is open
     available_from: str
     source_type: str
     lab_report: str = ""
     storage_full: bool = False
     contaminants: list[ContaminantIn] = []
+    bid_start: str = ""
+    bid_end: str = ""
+    auto_award: bool = False
+
+
+class ListingPatch(BaseModel):
+    """What a seller can change on a live listing."""
+    price_per_t: float | None = None
+    bid_start: str | None = None
+    bid_end: str | None = None
+    auto_award: bool | None = None
+    bidding_closed: bool | None = None
+    status: str | None = None
 
 
 class CapIn(BaseModel):
@@ -95,6 +108,7 @@ class MessageIn(BaseModel):
 
 class ThreadIn(BaseModel):
     listing_id: int
+    buyer_company_id: int | None = None   # sellers opening a thread with a bidder
 
 
 class StatusIn(BaseModel):
@@ -137,6 +151,8 @@ def listing_out(l: Listing, *, reveal_phone: bool = False) -> dict:
         "price_per_t": l.price_per_t, "available_from": l.available_from,
         "source_type": l.source_type, "lab_report": l.lab_report,
         "storage_full": l.storage_full, "status": l.status,
+        "bid_start": l.bid_start, "bid_end": l.bid_end,
+        "bidding_closed": l.bidding_closed, "auto_award": l.auto_award,
         "contaminants": [
             {"species": c.species, "ppm": c.ppm}
             for c in sorted(l.contaminants, key=lambda c: -c.ppm)

@@ -171,7 +171,57 @@ check("a pickup site that is not yours is rejected",
           "source_type": me_seller["capture_methods"][0],
       }, headers=seller).status_code == 400)
 
-print("\n9. role boundaries")
+print("\n9. the auction")
+auction = c.get("/listings/15/bids", headers=seller).json()
+a = auction["bidding"]
+check("the seller sees the window and the spread",
+      a["state"] == "open" and a["bid_count"] >= 3,
+      f"{a['bid_count']} bids, {a['lowest']:,.0f}-{a['highest']:,.0f}/t, closes {a['end']}")
+check("bidders are named to the seller",
+      all(b["buyer"]["name"] for b in auction["bids"]))
+check("bids are listed best price first",
+      [b["price_per_t"] for b in auction["bids"]]
+      == sorted((b["price_per_t"] for b in auction["bids"]), reverse=True))
+
+listing = c.get("/listings/15", headers=buyer).json()["bidding"]
+check("a buyer sees the numbers but no names",
+      listing["highest"] == a["highest"] and "buyer" not in str(listing))
+check("a bid under the starting price is refused",
+      c.post("/bids", json={"listing_id": 15, "requirement_id": req["id"],
+                            "volume_t": 5, "price_per_t": 100},
+             headers=buyer).status_code == 400)
+upcoming = next(
+    (l for l in c.get("/listings?region=west", headers=buyer).json()["listings"]
+     if l["bidding"]["state"] == "upcoming"),
+    None,
+)
+check("there is an auction yet to open", upcoming is not None)
+if upcoming:
+    check("a bid before the window opens is refused",
+          c.post("/bids", json={"listing_id": upcoming["id"], "requirement_id": req["id"],
+                                "volume_t": 5, "price_per_t": 9000},
+                 headers=buyer).status_code == 409,
+          f"opens {upcoming['bidding']['start']}")
+
+top = auction["bids"][0]
+partial = c.patch(f"/bids/{top['id']}", json={"status": "accepted"}, headers=seller).json()
+check("a part-quantity bid leaves the auction open",
+      partial["filled"] is False and partial["remaining_t"] > 0,
+      f"{partial['remaining_t']} tonne still unsold")
+check("the seller can talk to a bidder",
+      c.post("/threads", json={"listing_id": 15,
+                               "buyer_company_id": top["buyer"]["id"]},
+             headers=seller).status_code == 200)
+done = c.post("/listings/15/settle", headers=seller).json()
+check("finishing the auction declines the rest",
+      done["declined"] >= 1 and done["bidding"]["state"] == "closed",
+      f"{done['declined']} declined")
+check("bidding on a closed listing is refused",
+      c.post("/bids", json={"listing_id": 15, "requirement_id": req["id"],
+                            "volume_t": 5, "price_per_t": 3000},
+             headers=buyer).status_code == 409)
+
+print("\n10. role boundaries")
 check("buyer cannot create a listing",
       c.post("/listings", json={
           "address_id": 1, "volume_t": 1, "purity_pct": 99, "price_per_t": 1,

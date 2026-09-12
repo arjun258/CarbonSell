@@ -5,6 +5,8 @@ the same 25 scattered across India looks like an empty product.
 
 Run:  python -m app.seed
 """
+from datetime import date, timedelta
+
 from . import config
 from .db import Base, SessionLocal, engine
 from .models import (
@@ -122,6 +124,24 @@ REQUIREMENTS = [
 ]
 
 
+def window(open_in: int, days: int) -> tuple[str, str]:
+    """A bidding window relative to today, so the demo always has live
+    auctions no matter when it is seeded."""
+    start = date.today() + timedelta(days=open_in)
+    return start.isoformat(), (start + timedelta(days=days)).isoformat()
+
+
+# index -> (opens in N days, runs for N days, auto-award at the close)
+# Anything not listed here is a direct sale: no window, no competition.
+WINDOWS = {
+    0: (-3, 10, True), 3: (-2, 8, True), 4: (-1, 6, False),
+    6: (-4, 12, True), 7: (0, 7, False), 9: (-2, 9, True),
+    13: (-5, 11, True), 14: (-3, 9, True), 15: (-1, 8, False),
+    16: (2, 7, True), 17: (-6, 3, True), 20: (-2, 10, False),
+    23: (1, 9, True),
+}
+
+
 def build_profile(purity: float, fingerprint: str) -> dict[str, float]:
     """Close the mass balance: N2 soaks up whatever purity leaves over."""
     others = dict(PROFILES[fingerprint])
@@ -178,10 +198,14 @@ def run() -> None:
         addr = sorted(company.addresses, key=lambda a: a.id)[ai]
         method = sorted(company.capture_methods, key=lambda m: m.id)
         source = method[0].method if fp != "cement_oxy" or len(method) == 1 else method[-1].method
+        idx = len(listings)
+        opens_in, runs, auto = WINDOWS.get(idx, (None, None, False))
+        bid_start, bid_end = window(opens_in, runs) if opens_in is not None else ("", "")
         listing = Listing(
             company_id=company.id, address_id=addr.id, volume_t=vol, purity_pct=purity,
             form=form, price_per_t=price, available_from=avail, source_type=source,
             lab_report=f"lab-{company.id}-{len(listings)+1}.pdf", storage_full=full,
+            bid_start=bid_start, bid_end=bid_end, auto_award=auto,
         )
         db.add(listing)
         db.flush()
@@ -218,12 +242,23 @@ def run() -> None:
     db.add(Message(thread_id=thread.id, sender_company_id=listings[13].company_id,
                    body="Yes, 60 t is comfortable off this stream. Purity holds at 94% +/- 0.4."))
 
-    bid = Bid(
+    # An open auction on listing 14 with three buyers competing, so the
+    # manage-bids screen has something to manage.
+    db.add(Bid(
         listing_id=listings[14].id, requirement_id=requirements[5].id,
         buyer_company_id=buyers[4].id, volume_t=60, price_per_t=2050,
         status="pending", note="Can you hold this rate for a 3-month contract?",
-    )
-    db.add(bid)
+    ))
+    db.add(Bid(
+        listing_id=listings[14].id, requirement_id=requirements[4].id,
+        buyer_company_id=buyers[3].id, volume_t=40, price_per_t=2180,
+        status="pending", note="We can lift 40 t a month, every month.",
+    ))
+    db.add(Bid(
+        listing_id=listings[14].id, requirement_id=requirements[7].id,
+        buyer_company_id=buyers[6].id, volume_t=80, price_per_t=2120,
+        status="pending", note="Whole parcel, single pickup.",
+    ))
 
     accepted = Bid(
         listing_id=listings[9].id, requirement_id=requirements[7].id,

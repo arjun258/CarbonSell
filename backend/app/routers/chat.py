@@ -24,21 +24,32 @@ def _own_thread(db: Session, thread_id: int, user: User) -> Thread:
 def open_thread(
     body: ThreadIn, user: User = Depends(current_user), db: Session = Depends(get_db)
 ):
-    """Idempotent: one thread per buyer per listing, reopened on return."""
-    if user.role != "buyer":
-        raise HTTPException(403, "Only buyers start conversations from a listing")
+    """Idempotent: one thread per buyer per listing, reopened on return.
+
+    A buyer opens one from the listing; a seller opens one with a named
+    bidder from their manage-bids screen."""
     listing = db.get(Listing, body.listing_id)
     if listing is None:
         raise HTTPException(404, "No such listing")
 
+    if user.role == "buyer":
+        buyer_company_id = user.company_id
+    else:
+        if listing.company_id != user.company_id:
+            raise HTTPException(403, "Not your listing")
+        if body.buyer_company_id is None:
+            raise HTTPException(400, "Name the buyer you want to talk to")
+        buyer_company_id = body.buyer_company_id
+
     thread = (
         db.query(Thread)
-        .filter(Thread.listing_id == listing.id, Thread.buyer_company_id == user.company_id)
+        .filter(Thread.listing_id == listing.id,
+                Thread.buyer_company_id == buyer_company_id)
         .first()
     )
     if thread is None:
         thread = Thread(
-            listing_id=listing.id, buyer_company_id=user.company_id,
+            listing_id=listing.id, buyer_company_id=buyer_company_id,
             seller_company_id=listing.company_id,
         )
         db.add(thread)

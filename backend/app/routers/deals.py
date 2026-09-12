@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from .. import config
 from ..db import get_db
+from ..auction import accepted_volume, bidding_block, listing_bids, settle_if_due, window_state
 from ..engine import cheapest_haul, evaluate
 from ..loaders import demand_from_requirement, supply_from_listing
 from ..models import Address, Bid, Listing, Order, Pickup, Requirement, User
@@ -31,8 +32,23 @@ def place_bid(
         raise HTTPException(404, "Listing or requirement not found")
     if req.company_id != user.company_id:
         raise HTTPException(403, "That requirement is not yours")
-    if body.volume_t > listing.volume_t:
-        raise HTTPException(400, f"Only {listing.volume_t:.0f} t available on this listing")
+    settle_if_due(db, listing)
+    state = window_state(listing)
+    if state == "upcoming":
+        raise HTTPException(409, f"Bidding on this listing opens on {listing.bid_start}")
+    if state == "closed":
+        raise HTTPException(409, "Bidding on this listing has closed")
+    if body.price_per_t < listing.price_per_t:
+        raise HTTPException(
+            400,
+            f"The starting price is Rs {listing.price_per_t:,.2f}/tonne - bid at least that",
+        )
+
+    remaining = listing.volume_t - accepted_volume(listing_bids(db, listing.id))
+    if body.volume_t > remaining:
+        raise HTTPException(
+            400, f"Only {remaining:,.2f} tonne of this listing is still unsold"
+        )
 
     bid = Bid(
         listing_id=listing.id, requirement_id=req.id, buyer_company_id=user.company_id,
@@ -101,10 +117,14 @@ def respond_to_bid(
     if bid.status != "pending":
         raise HTTPException(409, f"This bid is already {bid.status}")
 
+    listing = bid.listing
     bid.status = body.status
     order_id = None
+    filled = False
+    remaining = listing.volume_t - accepted_volume(listing_bids(db, listing.id))
+
     if body.status == "accepted":
-        ev = evaluate(supply_from_listing(bid.listing), demand_from_requirement(bid.requirement))
+        ev = evaluate(supply_from_listing(listing), demand_from_requirement(bid.requirement))
         haul = ev["haul"] if ev else cheapest_haul(bid.volume_t, 0)
         order = Order(
             bid_id=bid.id, status="accepted",
@@ -114,8 +134,29 @@ def respond_to_bid(
         db.add(order)
         db.flush()
         order_id = order.id
+
+        # A bid that takes the whole quantity ends it. One that takes part of
+        # it leaves the listing open so the rest can be filled by someone
+        # else - the seller is told how much is left and can stop whenever.
+        remaining = listing.volume_t - accepted_volume(listing_bids(db, listing.id))
+        filled = remaining <= 0
+        if filled:
+            for other in listing_bids(db, listing.id):
+                if other.status == "pending":
+                    other.status = "rejected"
+            listing.bidding_closed = True
+            listing.settled = True
+
     db.commit()
-    return {"bid_id": bid.id, "status": bid.status, "order_id": order_id}
+    db.refresh(listing)
+    return {
+        "bid_id": bid.id,
+        "status": bid.status,
+        "order_id": order_id,
+        "filled": filled,
+        "remaining_t": round(max(0.0, remaining), 2),
+        "bidding": bidding_block(db, listing, user.company_id),
+    }
 
 
 @router.get("/orders/mine")

@@ -7,8 +7,10 @@ from ..db import get_db
 from ..engine import Demand, evaluate, rank
 from ..loaders import active_supplies, demand_from_requirement, supply_from_listing
 from ..models import Address, Contaminant, ContaminantCap, Listing, Requirement, Thread, User
+from ..auction import bidding_block, is_auction, settle_if_due, window_state
 from ..schemas import (
-    ListingIn, RequirementIn, listing_out, requirement_out,
+    ListingIn, ListingPatch, RequirementIn, company_out, listing_out,
+    requirement_out,
 )
 from ..security import current_user, require_role
 
@@ -69,11 +71,14 @@ def browse(
 
     out = []
     for r in rows:
+        settle_if_due(db, r)
         item = listing_out(r, reveal_phone=_reveal_for(db, r, user))
+        item["bidding"] = bidding_block(db, r, user.company_id)
         item["evaluation"] = (
             evaluate(supply_from_listing(r), demand) if demand is not None else None
         )
         out.append(item)
+    db.commit()
 
     # With a requirement selected, what actually qualifies comes first, best
     # delivered price at the top. Everything else still appears, below.
@@ -107,10 +112,13 @@ def my_listings(
     )
     out = []
     for r in rows:
+        settle_if_due(db, r)
         item = listing_out(r, reveal_phone=True)
-        item["bid_count"] = db.query(Bid).filter(Bid.listing_id == r.id).count()
+        item["bidding"] = bidding_block(db, r, user.company_id)
+        item["bid_count"] = item["bidding"]["bid_count"]
         item["thread_count"] = db.query(Thread).filter(Thread.listing_id == r.id).count()
         out.append(item)
+    db.commit()
     return {"listings": out}
 
 
@@ -126,11 +134,16 @@ def create_listing(
     if not 0 < body.purity_pct <= 100:
         raise HTTPException(400, "Purity must be between 0 and 100")
 
+    if body.bid_start and body.bid_end and body.bid_end < body.bid_start:
+        raise HTTPException(400, "Bidding cannot close before it opens")
+
     listing = Listing(
         company_id=user.company_id, address_id=address.id, volume_t=body.volume_t,
         purity_pct=body.purity_pct, form=body.form, price_per_t=body.price_per_t,
         available_from=body.available_from, source_type=body.source_type,
         lab_report=body.lab_report, storage_full=body.storage_full,
+        bid_start=body.bid_start, bid_end=body.bid_end,
+        auto_award=body.auto_award,
     )
     db.add(listing)
     db.flush()
@@ -141,7 +154,110 @@ def create_listing(
         db.add(Contaminant(listing_id=listing.id, species=c.species, ppm=c.ppm))
     db.commit()
     db.refresh(listing)
-    return listing_out(listing, reveal_phone=True)
+    out = listing_out(listing, reveal_phone=True)
+    out["bidding"] = bidding_block(db, listing, user.company_id)
+    return out
+
+
+@router.patch("/listings/{listing_id}")
+def update_listing(
+    listing_id: int,
+    body: ListingPatch,
+    user: User = Depends(require_role("emitter")),
+    db: Session = Depends(get_db),
+):
+    """Move the window, reprice, or stop taking bids."""
+    listing = db.get(Listing, listing_id)
+    if listing is None or listing.company_id != user.company_id:
+        raise HTTPException(404, "No such listing of yours")
+
+    for field in ("price_per_t", "bid_start", "bid_end", "auto_award",
+                  "bidding_closed", "status"):
+        value = getattr(body, field)
+        if value is not None:
+            setattr(listing, field, value)
+
+    if listing.bid_start and listing.bid_end and listing.bid_end < listing.bid_start:
+        raise HTTPException(400, "Bidding cannot close before it opens")
+    if body.bidding_closed is False:
+        listing.settled = False
+
+    db.commit()
+    db.refresh(listing)
+    out = listing_out(listing, reveal_phone=True)
+    out["bidding"] = bidding_block(db, listing, user.company_id)
+    return out
+
+
+@router.get("/listings/{listing_id}/bids")
+def listing_bid_list(
+    listing_id: int,
+    user: User = Depends(require_role("emitter")),
+    db: Session = Depends(get_db),
+):
+    """Every bid on one of your listings, best price first, with names."""
+    listing = db.get(Listing, listing_id)
+    if listing is None or listing.company_id != user.company_id:
+        raise HTTPException(404, "No such listing of yours")
+    settle_if_due(db, listing)
+    db.commit()
+
+    from ..auction import listing_bids
+    from ..models import Thread
+
+    rows = []
+    for b in listing_bids(db, listing.id):
+        ev = evaluate(supply_from_listing(listing), demand_from_requirement(b.requirement))
+        thread = (
+            db.query(Thread)
+            .filter(Thread.listing_id == listing.id,
+                    Thread.buyer_company_id == b.buyer_company_id)
+            .first()
+        )
+        rows.append({
+            "id": b.id, "status": b.status, "note": b.note,
+            "volume_t": b.volume_t, "price_per_t": b.price_per_t,
+            "total": round(b.volume_t * b.price_per_t, 2),
+            "created_at": b.created_at.isoformat(),
+            "buyer": company_out(b.buyer, reveal_phone=(b.status == "accepted")),
+            "delivery_city": b.requirement.address.city,
+            "distance_km": ev["distance_km"] if ev else None,
+            "thread_id": thread.id if thread else None,
+        })
+
+    return {
+        "listing": listing_out(listing, reveal_phone=True),
+        "bidding": bidding_block(db, listing, user.company_id),
+        "bids": rows,
+    }
+
+
+@router.post("/listings/{listing_id}/settle")
+def settle_listing(
+    listing_id: int,
+    user: User = Depends(require_role("emitter")),
+    db: Session = Depends(get_db),
+):
+    """Finish with what has been accepted and decline everything else."""
+    listing = db.get(Listing, listing_id)
+    if listing is None or listing.company_id != user.company_id:
+        raise HTTPException(404, "No such listing of yours")
+
+    from ..auction import listing_bids
+
+    declined = 0
+    for b in listing_bids(db, listing.id):
+        if b.status == "pending":
+            b.status = "rejected"
+            declined += 1
+    listing.bidding_closed = True
+    listing.settled = True
+    db.commit()
+    db.refresh(listing)
+    return {
+        "declined": declined,
+        "bidding": bidding_block(db, listing, user.company_id),
+    }
 
 
 @router.get("/listings/{listing_id}")
@@ -154,7 +270,10 @@ def listing_detail(
     listing = db.get(Listing, listing_id)
     if listing is None:
         raise HTTPException(404, "No such listing")
+    settle_if_due(db, listing)
+    db.commit()
     out = listing_out(listing, reveal_phone=_reveal_for(db, listing, user))
+    out["bidding"] = bidding_block(db, listing, user.company_id)
 
     # Priced against one of the buyer's requirements, if they picked one.
     if requirement_id:

@@ -45,6 +45,44 @@ export type Meta = {
 
 export type Contaminant = { species: string; ppm: number };
 
+export type Bidding = {
+  mode: "auction" | "direct";
+  state: "upcoming" | "open" | "closed" | "direct";
+  start: string;
+  end: string;
+  closed_by_seller: boolean;
+  auto_award: boolean;
+  settled: boolean;
+  starting_price: number;
+  bid_count: number;
+  highest: number | null;
+  lowest: number | null;
+  accepted_t: number;
+  remaining_t: number;
+  closes_in_days: number | null;
+  my_bids: {
+    id: number;
+    volume_t: number;
+    price_per_t: number;
+    status: string;
+    leading: boolean;
+  }[];
+};
+
+export type ListingBid = {
+  id: number;
+  status: string;
+  note: string;
+  volume_t: number;
+  price_per_t: number;
+  total: number;
+  created_at: string;
+  buyer: Company;
+  delivery_city: string;
+  distance_km: number | null;
+  thread_id: number | null;
+};
+
 export type Listing = {
   id: number;
   seller: Company;
@@ -58,6 +96,11 @@ export type Listing = {
   lab_report: string;
   storage_full: boolean;
   status: string;
+  bid_start: string;
+  bid_end: string;
+  bidding_closed: boolean;
+  auto_award: boolean;
+  bidding?: Bidding;
   contaminants: Contaminant[];
   unaccounted_ppm: number;
   bid_count?: number;

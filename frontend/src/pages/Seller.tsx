@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, inr, patch, post } from "../api";
 import { useAuth } from "../auth";
 import { AddressPicker } from "../components/AddressPicker";
@@ -18,18 +18,26 @@ import {
   SectionTitle,
   inputClass,
 } from "../ui";
-import type { Bid, Dashboard, Listing } from "../types";
+import { BiddingPanel, StateChip, windowLabel } from "../components/Auction";
+import type { Bid, Bidding, Dashboard, Listing, ListingBid } from "../types";
 
 /* -------------------------------------------------------------- overview */
 
 export function SellerOverview() {
   const [d, setD] = useState<Dashboard | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);
+  const [listings, setListings] = useState<Listing[]>([]);
 
   useEffect(() => {
     api<Dashboard>("/dashboard").then(setD);
     api<{ bids: Bid[] }>("/bids/mine").then((r) => setBids(r.bids));
+    api<{ listings: Listing[] }>("/listings/mine").then((r) => setListings(r.listings));
   }, []);
+
+  const auctions = listings
+    .filter((l) => l.bidding?.mode === "auction")
+    .sort((a, b) => (a.bidding!.state === "open" ? -1 : 1) - (b.bidding!.state === "open" ? -1 : 1))
+    .slice(0, 4);
 
   if (!d) return <p className="text-sm text-muted">Loading…</p>;
   const pending = bids.filter((b) => b.status === "pending");
@@ -37,6 +45,59 @@ export function SellerOverview() {
   return (
     <div className="flex flex-col gap-6">
       <KpiRow kpis={d.kpis} />
+
+      <div>
+        <SectionTitle
+          right={<Link to="/listings" className="text-accent underline">All listings</Link>}
+        >
+          Auctions
+        </SectionTitle>
+        {auctions.length ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            {auctions.map((l) => (
+              <Card key={l.id} className="flex flex-col gap-2 px-4 py-3">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="font-medium">
+                    {l.purity_pct}% · {inr(l.volume_t)} tonne
+                  </span>
+                  {l.bidding && <StateChip b={l.bidding} />}
+                </div>
+                <p className="tnum text-sm text-muted">
+                  {l.bidding && windowLabel(l.bidding)}
+                </p>
+                <p className="tnum text-sm">
+                  {l.bidding?.bid_count ?? 0} bid
+                  {l.bidding?.bid_count === 1 ? "" : "s"} · starting ₹
+                  {inr(l.price_per_t)}/t
+                  {l.bidding?.highest != null && (
+                    <>
+                      {" "}
+                      · highest{" "}
+                      <strong className="font-semibold">
+                        ₹{inr(l.bidding.highest)}/t
+                      </strong>
+                    </>
+                  )}
+                </p>
+                {l.bidding && l.bidding.accepted_t > 0 && (
+                  <p className="tnum text-sm text-muted">
+                    {inr(l.bidding.accepted_t)} tonne sold ·{" "}
+                    {inr(l.bidding.remaining_t)} tonne left
+                  </p>
+                )}
+                <Link to={`/listings/${l.id}/bids`} className="mt-auto pt-1">
+                  <Button className="w-full">Manage bids</Button>
+                </Link>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Empty
+            title="No auctions running"
+            hint="Publish a listing with a bidding window and it appears here."
+          />
+        )}
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
@@ -177,7 +238,7 @@ export function SellerListings() {
         <table className="w-full min-w-[54rem] text-sm">
           <thead>
             <tr className="border-b border-rule-strong bg-surface-2">
-              {["Purity", "Volume", "Form", "₹/t", "Pickup site", "From", "Bids", "Chats", ""].map(
+              {["Purity", "Volume", "Form", "Start ₹/t", "Bidding", "Bids", "Highest", ""].map(
                 (h) => (
                   <th
                     key={h}
@@ -200,17 +261,37 @@ export function SellerListings() {
                     </span>
                   )}
                 </td>
-                <td className="tnum px-3 py-2">{inr(l.volume_t)} t</td>
+                <td className="tnum px-3 py-2">{inr(l.volume_t)} tonne</td>
                 <td className="px-3 py-2">{l.form}</td>
                 <td className="tnum px-3 py-2">₹{inr(l.price_per_t)}</td>
-                <td className="px-3 py-2">{l.address.label}</td>
-                <td className="px-3 py-2 text-muted">{l.available_from}</td>
-                <td className="tnum px-3 py-2">{l.bid_count ?? 0}</td>
-                <td className="tnum px-3 py-2">{l.thread_count ?? 0}</td>
                 <td className="px-3 py-2">
-                  <Link to={`/listings/${l.id}`} className="text-accent underline">
-                    view
-                  </Link>
+                  {l.bidding ? (
+                    <span className="flex flex-col gap-1">
+                      <StateChip b={l.bidding} />
+                      <span className="text-[10px] text-muted">
+                        {windowLabel(l.bidding)}
+                      </span>
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="tnum px-3 py-2">{l.bid_count ?? 0}</td>
+                <td className="tnum px-3 py-2">
+                  {l.bidding?.highest != null ? `₹${inr(l.bidding.highest)}` : "—"}
+                </td>
+                <td className="px-3 py-2">
+                  <span className="flex flex-col gap-1">
+                    <Link
+                      to={`/listings/${l.id}/bids`}
+                      className="text-accent underline"
+                    >
+                      manage bids
+                    </Link>
+                    <Link to={`/listings/${l.id}`} className="text-muted underline">
+                      view
+                    </Link>
+                  </span>
                 </td>
               </tr>
             ))}
@@ -236,7 +317,11 @@ export function NewListing() {
     source_type: me?.capture_methods[0] ?? "",
     lab_report: "",
     storage_full: false,
+    bid_start: new Date().toISOString().slice(0, 10),
+    bid_end: new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10),
+    auto_award: true,
   });
+  const [auction, setAuction] = useState(true);
   const [rows, setRows] = useState<Row[]>([
     { species: "N2", ppm: 40000 },
     { species: "O2", ppm: 6000 },
@@ -256,6 +341,9 @@ export function NewListing() {
     try {
       const saved = await post<Listing>("/listings", {
         ...f,
+        bid_start: auction ? f.bid_start : "",
+        bid_end: auction ? f.bid_end : "",
+        auto_award: auction && f.auto_award,
         address_id: addressId,
         contaminants: rows,
       });
@@ -330,7 +418,10 @@ export function NewListing() {
                   <option value="gas">Gas</option>
                 </select>
               </Field>
-              <Field label="Price (₹/tonne ex-works)">
+              <Field
+                label={auction ? "Starting price (₹/tonne)" : "Price (₹/tonne)"}
+                hint={auction ? "No bid below this is accepted" : undefined}
+              >
                 <input
                   type="number"
                   className={inputClass}
@@ -364,6 +455,61 @@ export function NewListing() {
               />
               Storage nearly full — flag this as an urgent discounted offer
             </label>
+
+            <div className="border-t border-rule pt-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={auction}
+                  onChange={(e) => setAuction(e.target.checked)}
+                />
+                <span className="font-medium">Take bids over a set window</span>
+              </label>
+              <p className="mt-1 text-xs text-muted">
+                {auction
+                  ? "Buyers compete between these dates and see the highest and lowest bids, but never each other's names."
+                  : "Direct sale: buyers can bid at any time and you accept whichever you want."}
+              </p>
+
+              {auction && (
+                <>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <Field label="Bidding opens">
+                      <input
+                        type="date"
+                        className={inputClass}
+                        value={f.bid_start}
+                        onChange={(e) => setF({ ...f, bid_start: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Bidding closes">
+                      <input
+                        type="date"
+                        className={inputClass}
+                        value={f.bid_end}
+                        onChange={(e) => setF({ ...f, bid_end: e.target.value })}
+                      />
+                    </Field>
+                  </div>
+                  <label className="mt-3 flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={f.auto_award}
+                      onChange={(e) => setF({ ...f, auto_award: e.target.checked })}
+                    />
+                    <span>
+                      Award automatically at the close
+                      <span className="block text-xs text-muted">
+                        One bid for the whole quantity wins outright. Otherwise
+                        the highest bids are stacked until the quantity is
+                        filled. Leave this off to decide by hand.
+                      </span>
+                    </span>
+                  </label>
+                </>
+              )}
+            </div>
 
             <div className="border-t border-rule pt-3">
               <ContaminantRows
@@ -402,8 +548,16 @@ export function NewListing() {
             </p>
             <p className="tnum mt-1 text-sm">
               ₹{inr(f.price_per_t)}
-              <span className="text-xs text-muted">/t ex-works</span>
+              <span className="text-xs text-muted">
+                /t {auction ? "starting price" : "ex-works"}
+              </span>
             </p>
+            {auction && (
+              <p className="mt-1 text-xs text-muted">
+                bidding {f.bid_start} → {f.bid_end}
+                {f.auto_award ? " · awards automatically" : ""}
+              </p>
+            )}
             {f.storage_full && (
               <div className="mt-1">
                 <Pill tone="warn">urgent — storage nearly full</Pill>
@@ -421,6 +575,259 @@ export function NewListing() {
         </Card>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------ manage bids */
+
+/** The seller's auction desk for one listing: who has bid, for how much,
+ *  and the controls to take one, turn one down, or change the window. */
+export function ListingBids() {
+  const { id } = useParams();
+  const nav = useNavigate();
+  const [data, setData] = useState<{
+    listing: Listing;
+    bidding: Bidding;
+    bids: ListingBid[];
+  } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  const load = () =>
+    api<{ listing: Listing; bidding: Bidding; bids: ListingBid[] }>(
+      `/listings/${id}/bids`,
+    ).then(setData);
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  if (!data) return <p className="text-sm text-muted">Loading…</p>;
+  const { listing, bidding, bids } = data;
+  const pending = bids.filter((b) => b.status === "pending");
+
+  const respond = async (bid: ListingBid, status: "accepted" | "rejected") => {
+    setBusy(bid.id);
+    setNotice(null);
+    try {
+      const r = await patch<{ filled: boolean; remaining_t: number }>(
+        `/bids/${bid.id}`,
+        { status },
+      );
+      if (status === "accepted" && !r.filled) {
+        setNotice(
+          `Taken ${inr(bid.volume_t)} tonne from ${bid.buyer.name}. ` +
+            `${inr(r.remaining_t)} tonne is still unsold — accept another bid to ` +
+            `fill it, or finish the auction with what you have.`,
+        );
+      }
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const chat = async (bid: ListingBid) => {
+    if (bid.thread_id === null) {
+      await post("/threads", {
+        listing_id: listing.id,
+        buyer_company_id: bid.buyer.id,
+      });
+    }
+    nav("/messages");
+  };
+
+  const finish = async () => {
+    if (!confirm("Decline every remaining bid and close this auction?")) return;
+    await post(`/listings/${listing.id}/settle`, {});
+    setNotice(null);
+    await load();
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionTitle right={<Link to="/listings" className="text-accent underline">All listings</Link>}>
+        Bids on listing #{listing.id} — {listing.purity_pct}%,{" "}
+        {inr(listing.volume_t)} tonne
+      </SectionTitle>
+
+      <BiddingPanel b={bidding} />
+
+      {notice && (
+        <div className="border-l-3 border-accent bg-accent-soft px-4 py-3 text-sm">
+          {notice}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="ghost" onClick={() => setEditing(!editing)}>
+          {editing ? "Close" : "Change the window"}
+        </Button>
+        {bidding.mode === "auction" && bidding.state !== "closed" && (
+          <Button variant="danger" onClick={finish}>
+            Stop accepting bids
+          </Button>
+        )}
+      </div>
+
+      {editing && <WindowEditor listing={listing} onSaved={() => { setEditing(false); load(); }} />}
+
+      <SectionTitle right={`${pending.length} awaiting your decision`}>
+        Bidders
+      </SectionTitle>
+
+      {bids.length === 0 && (
+        <Empty
+          title="No bids yet"
+          hint="Buyers within range see this listing ranked by delivered cost."
+        />
+      )}
+
+      <div className="flex flex-col gap-3">
+        {bids.map((b) => (
+          <Card key={b.id} className="px-4 py-3">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="font-medium">{b.buyer.name}</span>
+              <span className="text-xs text-muted">{b.buyer.category}</span>
+              <Rating value={b.buyer.rating} />
+              {b.buyer.is_verified && <Pill tone="good">✓ verified</Pill>}
+              <Pill
+                tone={
+                  b.status === "accepted"
+                    ? "good"
+                    : b.status === "rejected"
+                      ? "stop"
+                      : "neutral"
+                }
+              >
+                {b.status}
+              </Pill>
+              {bidding.highest === b.price_per_t && b.status !== "rejected" && (
+                <Pill tone="warn">highest</Pill>
+              )}
+              <span className="tnum ml-auto text-right">
+                <span className="text-lg font-semibold">
+                  ₹{inr(b.price_per_t)}
+                </span>
+                <span className="text-xs text-muted">/tonne</span>
+                <span className="block text-xs text-muted">
+                  {inr(b.volume_t)} tonne · ₹{inr(b.total)} total
+                </span>
+              </span>
+            </div>
+
+            <p className="tnum mt-1 text-sm text-muted">
+              delivering to {b.delivery_city}
+              {b.distance_km !== null && ` · ${inr(b.distance_km)} km`} · placed{" "}
+              {b.created_at.slice(0, 10)}
+            </p>
+            {b.note && <p className="mt-1 text-sm text-ink-2">“{b.note}”</p>}
+
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-rule pt-3">
+              <Button variant="ghost" onClick={() => chat(b)}>
+                Chat
+              </Button>
+              {b.status === "pending" && (
+                <>
+                  <Button
+                    onClick={() => respond(b, "accepted")}
+                    disabled={busy === b.id}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => respond(b, "rejected")}
+                    disabled={busy === b.id}
+                  >
+                    Decline
+                  </Button>
+                </>
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WindowEditor({
+  listing,
+  onSaved,
+}: {
+  listing: Listing;
+  onSaved: () => void;
+}) {
+  const [f, setF] = useState({
+    bid_start: listing.bid_start,
+    bid_end: listing.bid_end,
+    price_per_t: listing.price_per_t,
+    auto_award: listing.auto_award,
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      await patch(`/listings/${listing.id}`, { ...f, bidding_closed: false });
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  return (
+    <Card className="px-4 py-4">
+      <form onSubmit={save} className="flex flex-col gap-3">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Bidding opens">
+            <input
+              type="date"
+              className={inputClass}
+              value={f.bid_start}
+              onChange={(e) => setF({ ...f, bid_start: e.target.value })}
+            />
+          </Field>
+          <Field label="Bidding closes">
+            <input
+              type="date"
+              className={inputClass}
+              value={f.bid_end}
+              onChange={(e) => setF({ ...f, bid_end: e.target.value })}
+            />
+          </Field>
+          <Field label="Starting price (₹/tonne)">
+            <input
+              type="number"
+              className={inputClass}
+              value={f.price_per_t}
+              onChange={(e) => setF({ ...f, price_per_t: Number(e.target.value) })}
+            />
+          </Field>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={f.auto_award}
+            onChange={(e) => setF({ ...f, auto_award: e.target.checked })}
+          />
+          Award automatically at the close
+        </label>
+        <p className="text-xs text-muted">
+          Saving reopens bidding if you had stopped it.
+        </p>
+        {error && (
+          <p className="border-l-3 border-stop bg-stop-soft px-3 py-2 text-sm">
+            {error}
+          </p>
+        )}
+        <Button className="self-start">Save window</Button>
+      </form>
+    </Card>
   );
 }
 
