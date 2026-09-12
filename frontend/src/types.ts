@@ -53,6 +53,8 @@ export type Bidding = {
   closed_by_seller: boolean;
   auto_award: boolean;
   settled: boolean;
+  pending_count: number;
+  awaiting_decision: boolean;
   starting_price: number;
   bid_count: number;
   highest: number | null;

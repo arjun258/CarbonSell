@@ -40,7 +40,10 @@ export function windowLabel(b: Bidding): string {
       ? `Bidding closes ${moment(b.end)}`
       : `Closes ${moment(b.end)} · ${countdown(left)}`;
   }
-  if (b.closed_by_seller) return "The seller stopped accepting bids";
+  if (b.closed_by_seller)
+    return b.settled
+      ? "The seller closed this auction"
+      : "The seller stopped taking new bids";
   return `Bidding closed ${moment(b.end)}`;
 }
 

@@ -138,20 +138,25 @@ def _order_for(db: Session, bid: Bid) -> None:
 
 
 def settle_if_due(db: Session, listing: Listing) -> list[Bid]:
-    """Close an auction whose end date has passed. Only a listing set to
-    award automatically picks winners; the rest simply stop taking bids."""
+    """Settle an auction whose closing time has passed.
+
+    Only the clock settles a listing, and only one set to award
+    automatically. A seller who closed to new bids by hand has taken
+    control, so nothing is decided for them: their pending bids stay put
+    until they accept, decline, or finish the auction.
+    """
     if not is_auction(listing) or listing.settled:
         return []
-    if window_state(listing) != "closed":
+    if listing.bidding_closed:
+        return []
+    if not listing.auto_award:
         return []
 
-    won: list[Bid] = []
-    if listing.auto_award:
-        won = award(db, listing)
-    else:
-        for b in listing_bids(db, listing.id):
-            if b.status == "pending" and listing.bidding_closed:
-                continue  # a seller who stopped early still decides by hand
+    closes = parse_moment(listing.bid_end, end_of_day=True)
+    if closes is None or datetime.now() <= closes:
+        return []
+
+    won = award(db, listing)
     listing.settled = True
     db.flush()
     return won
@@ -169,9 +174,13 @@ def bidding_block(db: Session, listing: Listing, viewer_company_id: int | None) 
     mine = [b for b in bids if b.buyer_company_id == viewer_company_id]
     taken = accepted_volume(bids)
 
+    pending = [b for b in bids if b.status == "pending"]
+
     return {
         "mode": "auction" if is_auction(listing) else "direct",
         "state": window_state(listing),
+        "pending_count": len(pending),
+        "awaiting_decision": bool(pending) and window_state(listing) == "closed",
         "start": listing.bid_start,
         "end": listing.bid_end,
         "closed_by_seller": listing.bidding_closed,

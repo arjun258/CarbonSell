@@ -652,8 +652,34 @@ export function ListingBids() {
     nav("/messages");
   };
 
+  const closeToNewBids = async () => {
+    await patch(`/listings/${listing.id}`, { bidding_closed: true });
+    setNotice(
+      bidding.pending_count > 0
+        ? `No new bids will be taken. The ${bidding.pending_count} bid` +
+          `${bidding.pending_count === 1 ? "" : "s"} already in are still yours ` +
+          `to accept or decline.`
+        : "No new bids will be taken.",
+    );
+    await load();
+  };
+
+  const reopen = async () => {
+    await patch(`/listings/${listing.id}`, { bidding_closed: false });
+    setNotice(null);
+    await load();
+  };
+
   const finish = async () => {
-    if (!confirm("Decline every remaining bid and close this auction?")) return;
+    const left = bidding.pending_count;
+    if (
+      left > 0 &&
+      !confirm(
+        `Decline ${left} bid${left === 1 ? "" : "s"} and finish this auction? ` +
+          `Anything you have already accepted stays.`,
+      )
+    )
+      return;
     await post(`/listings/${listing.id}/settle`, {});
     setNotice(null);
     await load();
@@ -674,16 +700,49 @@ export function ListingBids() {
         </div>
       )}
 
+      {bidding.awaiting_decision && (
+        <div className="border-l-3 border-accent bg-accent-soft px-4 py-3 text-sm">
+          <strong className="font-semibold">
+            Closed to new bids — {bidding.pending_count} still waiting on you.
+          </strong>{" "}
+          Accept as many as you need to fill the quantity, then finish the
+          auction to turn the rest down.
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         <Button variant="ghost" onClick={() => setEditing(!editing)}>
           {editing ? "Close" : "Change the window"}
         </Button>
-        {bidding.mode === "auction" && bidding.state !== "closed" && (
-          <Button variant="danger" onClick={finish}>
-            Stop accepting bids
-          </Button>
+        {bidding.mode === "auction" && !bidding.settled && (
+          <>
+            {bidding.state !== "closed" ? (
+              <Button variant="ghost" onClick={closeToNewBids}>
+                Close to new bids
+              </Button>
+            ) : (
+              bidding.closed_by_seller && (
+                <Button variant="ghost" onClick={reopen}>
+                  Reopen bidding
+                </Button>
+              )
+            )}
+            {bidding.pending_count > 0 && (
+              <Button variant="danger" onClick={finish}>
+                Finish and decline the rest
+              </Button>
+            )}
+          </>
         )}
       </div>
+      {bidding.mode === "auction" && !bidding.settled && bidding.state !== "closed" && (
+        <p className="text-xs text-muted">
+          <strong className="font-medium">Close to new bids</strong> stops the
+          clock and leaves every bid you already have to decide on.{" "}
+          <strong className="font-medium">Finish and decline the rest</strong>{" "}
+          ends the auction, keeping what you accepted and turning the rest down.
+        </p>
+      )}
 
       {editing && <WindowEditor listing={listing} onSaved={() => { setEditing(false); load(); }} />}
 

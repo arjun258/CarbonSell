@@ -212,9 +212,28 @@ check("the seller can talk to a bidder",
       c.post("/threads", json={"listing_id": 15,
                                "buyer_company_id": top["buyer"]["id"]},
              headers=seller).status_code == 200)
+closed = c.patch("/listings/15", json={"bidding_closed": True}, headers=seller).json()["bidding"]
+check("closing to new bids leaves the existing ones alone",
+      closed["state"] == "closed" and closed["settled"] is False
+      and closed["pending_count"] > 0,
+      f"{closed['pending_count']} still to decide")
+check("a new bid is refused once closed",
+      c.post("/bids", json={"listing_id": 15, "requirement_id": req["id"],
+                            "volume_t": 5, "price_per_t": 3000},
+             headers=buyer).status_code == 409)
+still = c.get("/listings/15/bids", headers=seller).json()["bids"]
+takeable = next(b for b in still if b["status"] == "pending")
+check("a pending bid can still be accepted after closing",
+      c.patch(f"/bids/{takeable['id']}", json={"status": "accepted"},
+              headers=seller).status_code == 200)
+check("reopening puts the auction back",
+      c.patch("/listings/15", json={"bidding_closed": False},
+              headers=seller).json()["bidding"]["state"] == "open")
+c.patch("/listings/15", json={"bidding_closed": True}, headers=seller)
+
 done = c.post("/listings/15/settle", headers=seller).json()
 check("finishing the auction declines the rest",
-      done["declined"] >= 1 and done["bidding"]["state"] == "closed",
+      done["bidding"]["settled"] is True and done["bidding"]["pending_count"] == 0,
       f"{done['declined']} declined")
 check("bidding on a closed listing is refused",
       c.post("/bids", json={"listing_id": 15, "requirement_id": req["id"],
