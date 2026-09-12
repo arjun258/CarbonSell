@@ -134,8 +134,9 @@ def create_listing(
     )
     db.add(listing)
     db.flush()
+    known = {s["code"] for s in config.SPECIES}
     for c in body.contaminants:
-        if c.species not in config.REMOVAL_COST_PER_T:
+        if c.species not in known:
             raise HTTPException(400, f"Unknown species: {c.species}")
         db.add(Contaminant(listing_id=listing.id, species=c.species, ppm=c.ppm))
     db.commit()

@@ -135,7 +135,43 @@ check("status cannot move backwards",
       c.patch(f"/orders/{order_id}/status", json={"status": "accepted"},
               headers=seller).status_code == 409)
 
-print("\n8. role boundaries")
+print("\n8. the seller publishes a listing")
+me_seller = c.get("/me", headers=seller).json()
+new_listing = c.post("/listings", json={
+    "address_id": me_seller["addresses"][0]["id"], "volume_t": 80,
+    "purity_pct": 97.4, "form": "liquid", "price_per_t": 2250,
+    "available_from": "2026-09-20", "source_type": me_seller["capture_methods"][0],
+    "lab_report": "lab-2026-09.pdf", "storage_full": False,
+    "contaminants": [
+        {"species": "N2", "ppm": 21000},
+        {"species": "O2", "ppm": 4000},
+        {"species": "H2O", "ppm": 250},
+    ],
+}, headers=seller)
+check("a listing with a contaminant profile is accepted",
+      new_listing.status_code == 200, new_listing.text[:120] if new_listing.status_code != 200 else "")
+if new_listing.status_code == 200:
+    body = new_listing.json()
+    check("the declared profile comes back on the listing",
+          {x["species"] for x in body["contaminants"]} == {"N2", "O2", "H2O"})
+    check("the unaccounted balance is reported",
+          body["unaccounted_ppm"] == round((100 - 97.4) * 10_000 - 25_250),
+          f"{body['unaccounted_ppm']} ppm")
+check("an unknown species is rejected",
+      c.post("/listings", json={
+          "address_id": me_seller["addresses"][0]["id"], "volume_t": 1,
+          "purity_pct": 99, "form": "liquid", "price_per_t": 1,
+          "available_from": "2026-09-20", "source_type": me_seller["capture_methods"][0],
+          "contaminants": [{"species": "XYZ", "ppm": 5}],
+      }, headers=seller).status_code == 400)
+check("a pickup site that is not yours is rejected",
+      c.post("/listings", json={
+          "address_id": 1, "volume_t": 1, "purity_pct": 99, "form": "liquid",
+          "price_per_t": 1, "available_from": "2026-09-20",
+          "source_type": me_seller["capture_methods"][0],
+      }, headers=seller).status_code == 400)
+
+print("\n9. role boundaries")
 check("buyer cannot create a listing",
       c.post("/listings", json={
           "address_id": 1, "volume_t": 1, "purity_pct": 99, "price_per_t": 1,
