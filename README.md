@@ -81,9 +81,18 @@ composition at all. The budget is what the buyer will pay **for the gas
 itself** — haulage is quoted on top and shown separately, never folded into
 the ceiling.
 
-What survives is scored out of 100 on price (35%), distance (25%), purity
-headroom (15%), volume (15%) and seller rating (10%), and every component is
-drawn as a bar on the match card.
+Purity is not scored, only gated: everything that reaches the ranking already
+meets the buyer's minimum, so ranking one acceptable stream above another on
+purity would push an over-specified offer around for no reason the buyer
+cares about.
+
+What survives is scored out of 100 on price (45%), distance (25%), volume
+(18%) and seller rating (12%), and every component is drawn as a bar on the
+match card. Price and distance are judged against the best the market can
+offer — the cheapest delivered price scores 100, the nearest seller scores
+100 — because both only mean anything next to the alternatives. Price uses
+the **delivered** figure, not the ex-works rate, since haulage is most of the
+bill.
 
 ## Reset and verify
 

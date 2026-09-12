@@ -178,7 +178,6 @@ export function ContactLine({
 const FIT_LABELS: Record<string, string> = {
   price: "Price",
   distance: "Distance",
-  purity: "Purity",
   volume: "Volume",
   rating: "Rating",
 };

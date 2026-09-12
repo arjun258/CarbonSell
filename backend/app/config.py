@@ -57,16 +57,16 @@ SPECIES = [
 ]
 
 # ---------------------------------------------------------------- scoring
-# Delivered cost is the seller's price plus haulage, nothing else. Purity
-# and contaminants are pass/fail gates, not charges - so the score weighs
-# price, distance, how much headroom the purity gives, whether the seller
-# can fill the order, and their track record.
+# Purity and contaminants are hard gates: anything that reaches the ranking
+# already meets the buyer's spec, so scoring purity again would only push
+# an over-specified stream up or down for no reason the buyer cares about.
+# What is left to judge is the money, the haul, whether the seller can fill
+# the order, and their track record.
 SCORE_WEIGHTS = {
-    "price": 0.35,
+    "price": 0.45,
     "distance": 0.25,
-    "purity": 0.15,
-    "volume": 0.15,
-    "rating": 0.10,
+    "volume": 0.18,
+    "rating": 0.12,
 }
 DISTANCE_FIT_CEILING_KM = 800
 

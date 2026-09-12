@@ -74,19 +74,12 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
     delivered = supply.price_per_t + haul["cost_per_t"]
     total_cost = delivered * moved_t
 
-    # Purity and distance are scored by closeness to what the buyer asked
-    # for. Price is not: there is no such thing as gas that is too cheap,
-    # so the further under the ceiling, the better.
+    # Provisional only. rank() rescores price and distance against the rest
+    # of the market, which is the only way those two mean anything.
     price_fit = _clamp01(
         (demand.budget_per_t - supply.price_per_t) / demand.budget_per_t
     )
 
-    headroom = 100.0 - demand.min_purity_pct
-    purity_fit = (
-        1.0
-        if headroom <= 0
-        else _clamp01(1 - (supply.purity_pct - demand.min_purity_pct) / headroom)
-    )
     volume_fit = _clamp01(supply.volume_t / demand.volume_t)
     distance_fit = _clamp01(1 - km / config.DISTANCE_FIT_CEILING_KM)
     rating_fit = _clamp01(supply.seller_rating / 5)
@@ -95,7 +88,6 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
     score = 100 * (
         w["price"] * price_fit
         + w["distance"] * distance_fit
-        + w["purity"] * purity_fit
         + w["volume"] * volume_fit
         + w["rating"] * rating_fit
     )
@@ -132,7 +124,6 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
         "fits": {
             "price": round(price_fit, 3),
             "distance": round(distance_fit, 3),
-            "purity": round(purity_fit, 3),
             "volume": round(volume_fit, 3),
             "rating": round(rating_fit, 3),
         },
@@ -142,19 +133,23 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
 def rank(supplies: list[Supply], demand: Demand) -> list[dict]:
     scored = [m for s in supplies if (m := evaluate(s, demand)) is not None]
 
-    # Distance is the one factor the buyer sets no target for, so it is
-    # scored against the closest seller who actually qualifies: the nearest
-    # option is 1.0 and everything else is judged by how near it comes.
+    # Price and distance only mean something next to the alternatives, so
+    # both are scored against the best this market can do: the cheapest
+    # delivered price is 1.0, the nearest seller is 1.0, and everything else
+    # is judged by how near it comes. Scoring price on the ex-works rate
+    # alone would ignore the haulage, which is most of the bill.
     if scored:
+        cheapest = min(m["delivered_per_t"] for m in scored) or 1.0
         nearest = min(m["distance_km"] for m in scored) or 1.0
         w = config.SCORE_WEIGHTS
         for m in scored:
+            m["fits"]["price"] = round(
+                _clamp01(cheapest / m["delivered_per_t"]) if m["delivered_per_t"] else 1.0, 3
+            )
             m["fits"]["distance"] = round(
                 _clamp01(nearest / m["distance_km"]) if m["distance_km"] else 1.0, 3
             )
-            m["score"] = round(
-                100 * sum(w[k] * m["fits"][k] for k in w), 1
-            )
+            m["score"] = round(100 * sum(w[k] * m["fits"][k] for k in w), 1)
 
     # Emergency offers surface first among equals: an emitter with full
     # storage is discounting for a reason.
