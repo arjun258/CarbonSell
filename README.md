@@ -61,8 +61,8 @@ Password `demo1234` for all of them — the sign-in screen has one-click buttons
 |---|---|
 | `buyer@nagpur.demo` | Nagpur CarbonCure Concrete — buyer |
 | `emitter@chandrapur.demo` | Chandrapur Super Thermal — seller |
-| `buyer@kutch.demo` | Kutch Methanol — buyer with a hard sulphur cap |
-| `emitter@kutch.demo` | Kutch Cement — seller with a dirty flue-gas stream |
+| `buyer@kutch.demo` | Kutch Methanol — buyer 
+| `emitter@kutch.demo` | Kutch Cement — seller 
 
 Try: sign in as `buyer@nagpur.demo` → **My requirements** → *Concrete curing*
 → **matches**. The top match is not the purest gas available, and the
