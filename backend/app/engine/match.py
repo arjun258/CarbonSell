@@ -49,11 +49,16 @@ def _clamp01(x: float) -> float:
 def evaluate(supply: Supply, demand: Demand) -> dict | None:
     """Full economics for one supply/demand pair. None means it cannot be used.
 
-    Delivered cost is the seller's price plus haulage. Purity and any
-    declared contaminant caps are pass/fail: we do not price a clean-up we
-    are not offering to do.
+    Delivered cost is the seller's price plus haulage. Purity, contaminant
+    caps and the buyer's price ceiling are pass/fail: we do not price a
+    clean-up we are not offering to do.
     """
     if not meets_purity(supply.purity_pct, demand.min_purity_pct):
+        return None
+
+    # budget_per_t is what the buyer will pay for the gas itself. Haulage
+    # is quoted on top and shown separately.
+    if supply.price_per_t > demand.budget_per_t:
         return None
 
     passes, contaminant_detail = contaminant_check(supply.contaminants, demand.caps)
@@ -65,10 +70,11 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
     haul = cheapest_haul(moved_t, km)
 
     delivered = supply.price_per_t + haul["cost_per_t"]
+    total_cost = delivered * moved_t
 
-    price_fit = _clamp01((demand.budget_per_t - delivered) / demand.budget_per_t)
-    if price_fit == 0:
-        return None
+    price_fit = _clamp01(
+        (demand.budget_per_t - supply.price_per_t) / demand.budget_per_t
+    )
 
     # Headroom above the buyer's floor, so a cleaner stream still reads as
     # better without anyone paying for the difference.
@@ -106,6 +112,7 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
         "storage_full": supply.storage_full,
         "score": round(score, 1),
         "delivered_per_t": round(delivered),
+        "total_cost": round(total_cost),
         "covers_t": round(moved_t, 1),
         "covers_requirement": supply.volume_t >= demand.volume_t,
         "breakdown": {

@@ -33,6 +33,7 @@ def _reveal_for(db: Session, listing: Listing, user: User | None) -> bool:
 @router.get("/listings")
 def browse(
     region: str = Query(config.DEFAULT_REGION),
+    requirement_id: int | None = None,
     min_purity: float | None = None,
     min_volume: float | None = None,
     max_price: float | None = None,
@@ -58,10 +59,37 @@ def browse(
         q = q.filter(Listing.form == form)
 
     rows = q.order_by(Listing.storage_full.desc(), Listing.purity_pct.desc()).all()
+
+    # Priced against one of the buyer's requirements so every card can show a
+    # delivered rate and a total, not just an ex-works price.
+    demand = None
+    req = db.get(Requirement, requirement_id) if requirement_id else None
+    if req is not None and req.company_id == user.company_id:
+        demand = demand_from_requirement(req)
+
+    out = []
+    for r in rows:
+        item = listing_out(r, reveal_phone=_reveal_for(db, r, user))
+        item["evaluation"] = (
+            evaluate(supply_from_listing(r), demand) if demand is not None else None
+        )
+        out.append(item)
+
+    # With a requirement selected, what actually qualifies comes first, best
+    # delivered price at the top. Everything else still appears, below.
+    if demand is not None:
+        out.sort(
+            key=lambda i: (
+                i["evaluation"] is None,
+                i["evaluation"]["delivered_per_t"] if i["evaluation"] else 0,
+            )
+        )
+
     return {
         "region": region,
         "count": len(rows),
-        "listings": [listing_out(r, reveal_phone=_reveal_for(db, r, user)) for r in rows],
+        "requirement": requirement_out(req) if demand is not None else None,
+        "listings": out,
     }
 
 

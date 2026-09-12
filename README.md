@@ -71,12 +71,19 @@ Try: sign in as `buyer@nagpur.demo` → **My requirements** → **matches**. The
 top match is not the purest gas available, and the breakdown says why.
 
 **How a match is priced and ranked.** Delivered cost is the seller's price
-plus haulage — nothing else. Purity is a floor and contaminant limits are a
-filter: a stream either qualifies or it does not, and nobody is charged for a
-clean-up the platform is not doing. A buyer who declares no contaminant limits
-is not filtered on composition at all. What is left is scored out of 100 on
-price (35%), distance (25%), purity headroom (15%), volume (15%) and seller
-rating (10%), and every component is drawn as a bar on the match card.
+plus haulage — nothing else. Haulage is trips × rate × road distance: a hired
+tanker is charged at its full rate whether or not it runs full, so nothing is
+pro-rated for a part load.
+
+Three things are pass/fail rather than priced. Purity is a floor. Contaminant
+limits are a filter, and a buyer who declares none is not filtered on
+composition at all. The budget is what the buyer will pay **for the gas
+itself** — haulage is quoted on top and shown separately, never folded into
+the ceiling.
+
+What survives is scored out of 100 on price (35%), distance (25%), purity
+headroom (15%), volume (15%) and seller rating (10%), and every component is
+drawn as a bar on the match card.
 
 ## Reset and verify
 

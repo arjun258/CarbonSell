@@ -84,7 +84,6 @@ export type Haul = {
   distance_km: number;
   total_cost: number;
   cost_per_t: number;
-  utilisation: number;
 };
 
 export type Match = {
@@ -102,6 +101,7 @@ export type Match = {
   storage_full: boolean;
   score: number;
   delivered_per_t: number;
+  total_cost: number;
   covers_t: number;
   covers_requirement: boolean;
   breakdown: {

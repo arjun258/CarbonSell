@@ -107,17 +107,18 @@ LISTINGS = [
 ]
 
 # (buyer index, address index, volume, min_purity, budget, caps in ppm)
-# Caps are the buyer's own choice. Several requirements declare none, which
+# Budget is the ceiling for the gas itself, ex-works. Haulage is quoted on
+# top. Caps are the buyer's own choice, and several declare none - which
 # means contaminants are not used to filter them at all.
 REQUIREMENTS = [
-    (0, 0, 50, 99.0, 8500, {"H2S": 5}),
-    (0, 1, 120, 98.5, 8000, {}),
-    (1, 0, 30, 99.5, 9500, {"O2": 1000, "H2S": 5}),
-    (2, 0, 25, 99.0, 8000, {"NOx": 50}),
-    (3, 0, 40, 96.0, 6500, {}),
-    (4, 0, 60, 95.0, 6500, {}),
-    (5, 0, 20, 99.5, 9000, {"H2O": 100}),
-    (6, 0, 80, 98.5, 7500, {"H2S": 10}),
+    (0, 0, 50, 99.0, 3400, {"H2S": 5}),
+    (0, 1, 120, 98.5, 3000, {}),
+    (1, 0, 30, 99.5, 3500, {"O2": 1000, "H2S": 5}),
+    (2, 0, 25, 99.0, 3200, {"NOx": 50}),
+    (3, 0, 40, 96.0, 2300, {}),
+    (4, 0, 60, 95.0, 2200, {}),
+    (5, 0, 20, 99.5, 3300, {"H2O": 100}),
+    (6, 0, 80, 98.5, 2900, {"H2S": 10}),
 ]
 
 

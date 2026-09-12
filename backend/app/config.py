@@ -38,8 +38,6 @@ TRUCKS = [
     {"name": "Standard CO2 road tanker", "cap_t": 18, "rate_km": 55},
     {"name": "ISO-tank semi-trailer", "cap_t": 24, "rate_km": 68},
 ]
-HANDLING_PER_TRIP = 1500   # loading + unloading, INR
-RETURN_FACTOR = 1.8        # the tanker comes back empty
 HAVERSINE_DETOUR = 1.25    # crow-flight -> road, for the offline fallback
 
 # ---------------------------------------------------------------- contaminants

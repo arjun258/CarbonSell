@@ -233,6 +233,13 @@ export function CostBreakdown({ m }: { m: Match }) {
           <td className="tnum py-1 pr-3 text-right">₹{inr(m.delivered_per_t)}</td>
           <td className="py-1 text-xs font-normal text-muted">per tonne</td>
         </tr>
+        <tr className="font-semibold">
+          <td className="py-1 pr-3">Total</td>
+          <td className="tnum py-1 pr-3 text-right">₹{inr(m.total_cost)}</td>
+          <td className="py-1 text-xs font-normal text-muted">
+            for {inr(m.covers_t)} t
+          </td>
+        </tr>
       </tbody>
     </table>
   );
@@ -261,7 +268,7 @@ export function HaulPlanCard({
       </p>
       <p className="tnum mt-0.5 text-sm text-ink-2">
         {inr(haul.distance_km)} km · ₹{inr(haul.total_cost)} total · ₹
-        {inr(haul.cost_per_t)}/t · {haul.utilisation}% utilised
+        {inr(haul.cost_per_t)}/t
       </p>
     </div>
   );

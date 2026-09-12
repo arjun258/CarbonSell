@@ -58,9 +58,14 @@ export function BuyerOverview() {
                 <div className="flex flex-wrap items-baseline gap-2">
                   <span className="font-medium">{m.seller_name}</span>
                   <Pill>{m.city}</Pill>
-                  <span className="tnum ml-auto text-lg font-semibold">
-                    ₹{inr(m.delivered_per_t)}
+                  <span className="tnum ml-auto text-right">
+                    <span className="text-lg font-semibold">
+                      ₹{inr(m.delivered_per_t)}
+                    </span>
                     <span className="text-xs font-normal text-muted">/t delivered</span>
+                    <span className="block text-xs text-muted">
+                      ₹{inr(m.total_cost)} total
+                    </span>
                   </span>
                 </div>
                 <p className="tnum mt-1 text-sm text-muted">
@@ -131,7 +136,7 @@ export function Requirements() {
               </span>
               <Pill>{r.address.city}</Pill>
               <span className="tnum text-sm text-muted">
-                budget ₹{inr(r.budget_per_t)}/t delivered · {r.address.label}
+                up to ₹{inr(r.budget_per_t)}/t for the gas · {r.address.label}
               </span>
               <Link
                 to={`/requirements/${r.id}/matches`}
@@ -202,7 +207,10 @@ function RequirementForm({ onSaved }: { onSaved: () => void }) {
               }
             />
           </Field>
-          <Field label="Budget (₹/tonne delivered)" hint="The seller's price plus haulage">
+          <Field
+            label="Budget (₹/tonne for the CO₂)"
+            hint="The most you will pay for the gas itself — haulage is quoted separately on every match"
+          >
             <input
               type="number"
               className={inputClass}
@@ -256,7 +264,7 @@ export function Matches() {
       </SectionTitle>
 
       <p className="tnum text-sm text-muted">
-        min purity {r.min_purity_pct}% · budget ₹{inr(r.budget_per_t)}/t delivered ·{" "}
+        min purity {r.min_purity_pct}% · up to ₹{inr(r.budget_per_t)}/t for the gas ·{" "}
         {r.caps.length > 0
           ? `limits ${r.caps.map((c) => `${c.species}≤${c.max_ppm}`).join(", ")}`
           : "no contaminant limits"}
@@ -278,7 +286,7 @@ export function Matches() {
       {data.matches.length === 0 && (
         <Empty
           title="Nothing clears your spec at this budget"
-          hint="Lower the minimum purity, raise the budget, or relax a contaminant limit."
+          hint="Lower the minimum purity, raise the price you will pay for the gas, or relax a contaminant limit."
         />
       )}
 
@@ -310,9 +318,14 @@ function MatchCard({
         <Rating value={m.seller_rating} />
         {m.storage_full && <Pill tone="warn">storage nearly full</Pill>}
         <span className="ml-auto flex items-baseline gap-3">
-          <span className="tnum text-xl font-semibold">
-            ₹{inr(m.delivered_per_t)}
+          <span className="tnum text-right">
+            <span className="text-xl font-semibold">
+              ₹{inr(m.delivered_per_t)}
+            </span>
             <span className="text-xs font-normal text-muted">/t delivered</span>
+            <span className="block text-xs text-muted">
+              ₹{inr(m.total_cost)} for {inr(m.covers_t)} t
+            </span>
           </span>
           <span className="tnum border border-accent px-2 py-0.5 font-mono text-sm text-accent">
             {m.score}
@@ -367,25 +380,55 @@ export function Browse() {
   const { region } = useAuth();
   const [listings, setListings] = useState<Listing[]>([]);
   const [reqs, setReqs] = useState<Requirement[]>([]);
+  const [reqId, setReqId] = useState<number | "">("");
   const [f, setF] = useState({ min_purity: "", min_volume: "", max_price: "", form: "" });
 
   useEffect(() => {
-    api<{ requirements: Requirement[] }>("/requirements/mine").then((r) =>
-      setReqs(r.requirements),
-    );
+    api<{ requirements: Requirement[] }>("/requirements/mine").then((r) => {
+      setReqs(r.requirements);
+      setReqId((id) => (id === "" ? (r.requirements[0]?.id ?? "") : id));
+    });
   }, []);
 
   useEffect(() => {
+    // Requirement selection arrives a tick after the first fetch, so an
+    // earlier unpriced response can land last and clobber the priced one.
+    let cancelled = false;
     const qs = new URLSearchParams({ region });
+    if (reqId !== "") qs.set("requirement_id", String(reqId));
     Object.entries(f).forEach(([k, v]) => v && qs.set(k, v));
-    api<{ listings: Listing[] }>(`/listings?${qs}`).then((r) => setListings(r.listings));
-  }, [region, f]);
+    api<{ listings: Listing[] }>(`/listings?${qs}`).then((r) => {
+      if (!cancelled) setListings(r.listings);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [region, reqId, f]);
+
+  const active = reqs.find((r) => r.id === reqId);
 
   return (
     <div className="flex flex-col gap-4">
       <SectionTitle right={`${listings.length} listings`}>Marketplace</SectionTitle>
 
       <Card className="flex flex-wrap items-end gap-3 px-4 py-3">
+        <div className="flex flex-col gap-1">
+          <Label>Price it for</Label>
+          <select
+            className={inputClass}
+            value={reqId}
+            onChange={(e) =>
+              setReqId(e.target.value === "" ? "" : Number(e.target.value))
+            }
+          >
+            <option value="">No requirement — ex-works prices only</option>
+            {reqs.map((r) => (
+              <option key={r.id} value={r.id}>
+                {inr(r.volume_t)} t into {r.address.city} (min {r.min_purity_pct}%)
+              </option>
+            ))}
+          </select>
+        </div>
         <Field label="Min purity %">
           <input
             className={`${inputClass} w-24`}
@@ -400,7 +443,7 @@ export function Browse() {
             onChange={(e) => setF({ ...f, min_volume: e.target.value })}
           />
         </Field>
-        <Field label="Max ₹/t ex-works">
+        <Field label="Max ₹/t for the gas">
           <input
             className={`${inputClass} w-28`}
             value={f.max_price}
@@ -418,42 +461,89 @@ export function Browse() {
             <option value="gas">Gas</option>
           </select>
         </Field>
-        <p className="ml-auto max-w-xs text-xs text-muted">
-          Delivered price and contaminant fit are computed against a
-          requirement — open one from{" "}
-          <Link to="/requirements" className="text-accent underline">
-            My requirements
-          </Link>
-          .
-        </p>
       </Card>
 
+      {active ? (
+        <p className="text-sm text-muted">
+          Totals below are for <strong>{inr(active.volume_t)} t</strong> delivered
+          to {active.address.city}.
+        </p>
+      ) : (
+        <p className="text-sm text-muted">
+          Pick a requirement above to see haulage and a delivered total on every
+          listing.
+        </p>
+      )}
+
       <div className="grid gap-3 md:grid-cols-2">
-        {listings.map((l) => (
-          <Card key={l.id} className="px-4 py-3">
-            <div className="flex items-baseline gap-2">
-              <span className="font-medium">{l.seller.name}</span>
-              {l.seller.is_verified && <Pill tone="good">✓</Pill>}
-              {l.storage_full && <Pill tone="warn">urgent</Pill>}
-              <span className="tnum ml-auto text-sm">
-                ₹{inr(l.price_per_t)}
-                <span className="text-xs text-muted">/t ex-works</span>
-              </span>
-            </div>
-            <p className="tnum mt-1 text-sm text-muted">
-              {l.purity_pct}% · {inr(l.volume_t)} t/mo · {l.form} ·{" "}
-              {l.address.city}
-            </p>
-            <div className="mt-2 flex gap-2">
-              <Link
-                to={`/listings/${l.id}${reqs[0] ? `?requirement=${reqs[0].id}` : ""}`}
-                className="text-sm text-accent underline"
-              >
-                View & message →
-              </Link>
-            </div>
-          </Card>
-        ))}
+        {listings.map((l) => {
+          const ev = l.evaluation;
+          return (
+            <Card key={l.id} className="px-4 py-3">
+              <div className="flex items-baseline gap-2">
+                <span className="font-medium">{l.seller.name}</span>
+                {l.seller.is_verified && <Pill tone="good">✓</Pill>}
+                {l.storage_full && <Pill tone="warn">urgent</Pill>}
+                <span className="tnum ml-auto text-sm">
+                  ₹{inr(l.price_per_t)}
+                  <span className="text-xs text-muted">/t for the gas</span>
+                </span>
+              </div>
+              <p className="tnum mt-1 text-sm text-muted">
+                {l.purity_pct}% · {inr(l.volume_t)} t/mo · {l.form} ·{" "}
+                {l.address.city}
+              </p>
+
+              {ev ? (
+                <table className="tnum mt-2 w-full text-sm">
+                  <tbody>
+                    <tr>
+                      <td className="py-0.5 pr-3 text-muted">Product</td>
+                      <td className="py-0.5 text-right">
+                        ₹{inr(ev.breakdown.listing_per_t)}/t
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-0.5 pr-3 text-muted">
+                        Haulage · {inr(ev.distance_km)} km
+                      </td>
+                      <td className="py-0.5 text-right">
+                        ₹{inr(ev.breakdown.haul_per_t)}/t
+                      </td>
+                    </tr>
+                    <tr className="border-t border-rule-strong font-semibold">
+                      <td className="py-1 pr-3">
+                        Total for {inr(ev.covers_t)} t
+                      </td>
+                      <td className="py-1 text-right">
+                        ₹{inr(ev.total_cost)}
+                        <span className="ml-1 text-xs font-normal text-muted">
+                          (₹{inr(ev.delivered_per_t)}/t)
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              ) : (
+                reqId !== "" && (
+                  <p className="mt-2 text-xs text-accent">
+                    Does not meet this requirement — purity, a contaminant limit
+                    or your price ceiling.
+                  </p>
+                )
+              )}
+
+              <div className="mt-2 flex gap-2">
+                <Link
+                  to={`/listings/${l.id}${reqId !== "" ? `?requirement=${reqId}` : ""}`}
+                  className="text-sm text-accent underline"
+                >
+                  View &amp; message →
+                </Link>
+              </div>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
