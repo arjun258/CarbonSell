@@ -26,6 +26,8 @@ class Supply:
     form: str
     source_type: str
     city: str
+    address_label: str
+    address_line: str
     lat: float
     lng: float
     storage_full: bool = False
@@ -72,10 +74,12 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
     delivered = supply.price_per_t + haul["cost_per_t"]
     total_cost = delivered * moved_t
 
-    # Every fit answers the same question: how close is this to what the
-    # buyer actually asked for? Exactly on spec scores 1.0; drifting away
-    # from the stated figure scores lower, in either direction.
-    price_fit = _clamp01(supply.price_per_t / demand.budget_per_t)
+    # Purity and distance are scored by closeness to what the buyer asked
+    # for. Price is not: there is no such thing as gas that is too cheap,
+    # so the further under the ceiling, the better.
+    price_fit = _clamp01(
+        (demand.budget_per_t - supply.price_per_t) / demand.budget_per_t
+    )
 
     headroom = 100.0 - demand.min_purity_pct
     purity_fit = (
@@ -104,6 +108,8 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
         "seller_rating": supply.seller_rating,
         "verified": supply.verified,
         "city": supply.city,
+        "address_label": supply.address_label,
+        "address_line": supply.address_line,
         "purity_pct": supply.purity_pct,
         "volume_t": supply.volume_t,
         "form": supply.form,

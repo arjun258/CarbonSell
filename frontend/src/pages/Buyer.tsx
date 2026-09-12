@@ -69,8 +69,8 @@ export function BuyerOverview() {
                   </span>
                 </div>
                 <p className="tnum mt-1 text-sm text-muted">
-                  {m.purity_pct}% · {m.city} · {inr(m.distance_km)} km · score{" "}
-                  {m.score}
+                  {m.purity_pct}% · {m.address_line} ·{" "}
+                  {inr(m.distance_km)} km · score {m.score}
                 </p>
                 <Link
                   to={`/requirements/${m.requirement_id}/matches`}
@@ -132,7 +132,7 @@ export function Requirements() {
           <Card key={r.id} className="px-4 py-3">
             <div className="flex flex-wrap items-baseline gap-3">
               <span className="font-medium">
-                {inr(r.volume_t)} t/mo · min {r.min_purity_pct}%
+{inr(r.volume_t)} tonne · min {r.min_purity_pct}%
               </span>
               <Pill>{r.address.city}</Pill>
               <span className="tnum text-sm text-muted">
@@ -188,7 +188,7 @@ function RequirementForm({ onSaved }: { onSaved: () => void }) {
             value={addressId}
             onChange={setAddressId}
           />
-          <Field label="Volume needed (t/month)">
+          <Field label="Volume needed (tonne)">
             <input
               type="number"
               className={inputClass}
@@ -260,7 +260,7 @@ export function Matches() {
   return (
     <div className="flex flex-col gap-4">
       <SectionTitle right={`${data.count} feasible of ${data.considered} listings`}>
-        {inr(r.volume_t)} t/mo into {r.address.city}
+        {inr(r.volume_t)} tonne into {r.address.city}
       </SectionTitle>
 
       <p className="tnum text-sm text-muted">
@@ -324,7 +324,7 @@ function MatchCard({
             </span>
             <span className="text-xs font-normal text-muted">/t delivered</span>
             <span className="block text-xs text-muted">
-              ₹{inr(m.total_cost)} for {inr(m.covers_t)} t
+              ₹{inr(m.total_cost)} for {inr(m.covers_t)} tonne
             </span>
           </span>
           <span className="tnum border border-accent px-2 py-0.5 font-mono text-sm text-accent">
@@ -334,20 +334,21 @@ function MatchCard({
       </div>
 
       <p className="tnum mt-1 text-sm text-ink-2">
-        {m.purity_pct}% purity · {inr(m.volume_t)} t available ·{" "}
-        {inr(m.distance_km)} km · {m.city} · {m.form} · {m.source_type}
+        {m.purity_pct}% purity · {inr(m.volume_t)} tonne available ·{" "}
+        {inr(m.distance_km)} km · {m.form} · {m.source_type}
         {!m.covers_requirement && (
           <span className="text-accent">
             {" "}
-            — covers {inr(m.covers_t)} t, pair with another seller
+            — covers {inr(m.covers_t)} tonne, pair with another seller
           </span>
         )}
       </p>
+      <p className="mt-0.5 text-sm text-muted">{m.address_line}</p>
 
       <div className="mt-3 grid gap-4 lg:grid-cols-2">
         <CostBreakdown m={m} />
         <div className="flex flex-col gap-3">
-          <HaulPlanCard haul={m.haul} rateSource={m.rate_source} />
+          <HaulPlanCard haul={m.haul} />
           <ContaminantCompare m={m} />
         </div>
       </div>
@@ -490,8 +491,14 @@ export function Browse() {
                 </span>
               </div>
               <p className="tnum mt-1 text-sm text-muted">
-                {l.purity_pct}% · {inr(l.volume_t)} t/mo · {l.form} ·{" "}
-                {l.address.city}
+                {l.purity_pct}% purity · {inr(l.volume_t)} tonne available ·{" "}
+                {l.form} · {l.source_type}
+              </p>
+              <p className="mt-0.5 text-xs text-muted">
+                {[l.address.line1, l.address.city, l.address.state, l.address.pincode]
+                  .filter(Boolean)
+                  .filter((x, i, a) => a.findIndex((y) => y.toLowerCase().includes(x.toLowerCase())) === i)
+                  .join(", ")}
               </p>
 
               {ev ? (
@@ -513,7 +520,7 @@ export function Browse() {
                     </tr>
                     <tr className="border-t border-rule-strong font-semibold">
                       <td className="py-1 pr-3">
-                        Total for {inr(ev.covers_t)} t
+                        Total for {inr(ev.covers_t)} tonne
                       </td>
                       <td className="py-1 text-right">
                         ₹{inr(ev.total_cost)}
@@ -581,7 +588,7 @@ export function ListingDetail() {
   return (
     <div className="flex flex-col gap-4">
       <SectionTitle right={`listing #${l.id}`}>
-        {l.purity_pct}% CO₂ · {inr(l.volume_t)} t/mo · {l.address.city}
+        {l.purity_pct}% CO₂ · {inr(l.volume_t)} tonne · {l.address.city}
       </SectionTitle>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
@@ -591,10 +598,7 @@ export function ListingDetail() {
               <Label>Delivered cost for your requirement</Label>
               <div className="mt-2 grid gap-4 lg:grid-cols-2">
                 <CostBreakdown m={l.evaluation} />
-                <HaulPlanCard
-                  haul={l.evaluation.haul}
-                  rateSource={l.evaluation.rate_source}
-                />
+                <HaulPlanCard haul={l.evaluation.haul} />
               </div>
             </Card>
           )}

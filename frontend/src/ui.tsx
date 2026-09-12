@@ -237,7 +237,7 @@ export function CostBreakdown({ m }: { m: Match }) {
           <td className="py-1 pr-3">Total</td>
           <td className="tnum py-1 pr-3 text-right">₹{inr(m.total_cost)}</td>
           <td className="py-1 text-xs font-normal text-muted">
-            for {inr(m.covers_t)} t
+            for {inr(m.covers_t)} tonne
           </td>
         </tr>
       </tbody>
@@ -245,22 +245,11 @@ export function CostBreakdown({ m }: { m: Match }) {
   );
 }
 
-export function HaulPlanCard({
-  haul,
-  rateSource,
-}: {
-  haul: Haul;
-  rateSource?: string;
-}) {
+export function HaulPlanCard({ haul }: { haul: Haul }) {
   return (
     <div className="border border-rule bg-surface-2 px-3 py-2">
       <div className="flex items-baseline gap-2">
         <Label>Haul plan</Label>
-        {rateSource && (
-          <span className="ml-auto font-mono text-[10px] text-muted">
-            {rateSource === "estimate" ? "estimated distance" : `${rateSource} routing`}
-          </span>
-        )}
       </div>
       <p className="mt-1 text-sm font-medium">
         {haul.truck} ({haul.capacity_t} t) × {haul.trips}{" "}
@@ -275,14 +264,8 @@ export function HaulPlanCard({
 }
 
 export function ContaminantCompare({ m }: { m: Match }) {
-  if (!m.contaminant_detail.length) {
-    return (
-      <p className="text-xs text-muted">
-        No contaminant limits set on this requirement — every stream qualifies
-        on composition.
-      </p>
-    );
-  }
+  // Nothing to say when the buyer set no limits.
+  if (!m.contaminant_detail.length) return null;
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
       {m.contaminant_detail.map((d) => (

@@ -2,7 +2,21 @@
 from sqlalchemy.orm import Session
 
 from .engine import Demand, Supply
-from .models import Listing, Requirement
+from .models import Address, Listing, Requirement
+
+
+def _one_line(a: Address) -> str:
+    """A readable postal line, without repeating a part that is already
+    inside line1 (seeded sites carry the site name and city there)."""
+    parts: list[str] = []
+    for raw in (a.line1, a.city, a.state, a.pincode):
+        piece = (raw or "").strip()
+        if not piece:
+            continue
+        if any(piece.lower() in seen.lower() for seen in parts):
+            continue
+        parts.append(piece)
+    return ", ".join(parts)
 
 
 def supply_from_listing(listing: Listing) -> Supply:
@@ -19,6 +33,8 @@ def supply_from_listing(listing: Listing) -> Supply:
         form=listing.form,
         source_type=listing.source_type,
         city=listing.address.city,
+        address_label=listing.address.label,
+        address_line=_one_line(listing.address),
         lat=listing.address.lat,
         lng=listing.address.lng,
         storage_full=listing.storage_full,

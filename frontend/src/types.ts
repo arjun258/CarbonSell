@@ -94,6 +94,8 @@ export type Match = {
   seller_rating: number;
   verified: boolean;
   city: string;
+  address_label: string;
+  address_line: string;
   purity_pct: number;
   volume_t: number;
   form: string;

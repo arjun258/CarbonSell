@@ -230,7 +230,7 @@ export function NewListing() {
                   </Button>
                 </div>
               </div>
-              <Field label="Volume available (t/month)">
+              <Field label="Volume available (tonne)">
                 <input
                   type="number"
                   className={inputClass}
@@ -325,7 +325,7 @@ export function NewListing() {
               {me?.company.is_verified && <Pill tone="good">✓</Pill>}
             </div>
             <p className="tnum mt-1 text-sm text-muted">
-              {f.purity_pct}% · {inr(f.volume_t)} t/mo · {f.form}
+              {f.purity_pct}% · {inr(f.volume_t)} tonne · {f.form}
               {site && ` · ${site.city}`}
             </p>
             <p className="tnum mt-1 text-sm">
