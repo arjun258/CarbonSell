@@ -12,6 +12,9 @@ React + Vite · FastAPI · SQLite · Ola Maps
 
 - Python 3.12+
 - Node 20+
+- **Ola Maps credentials** from [Krutrim Cloud](https://maps.olakrutrim.com) —
+  required: the app uses them for address autocomplete and for road distance,
+  which every delivered price depends on
 
 ## First-time setup
 
@@ -23,8 +26,8 @@ python3 -m venv .venv && ./.venv/bin/pip install -r backend/requirements.txt
 cd frontend && npm install
 ```
 
-Create `backend/.env` from the template (the app runs without real keys —
-distances fall back to OSRM, and address autocomplete is simply disabled):
+Create `backend/.env` from the template and fill in your Ola Maps credentials
+(see [Ola Maps](#ola-maps) below):
 
 ```bash
 cp backend/.env.example backend/.env
@@ -93,9 +96,9 @@ Print the ranked market as a terminal table:
 cd backend && ../.venv/bin/python -m app.test_engine
 ```
 
-## Ola Maps (optional)
+## Ola Maps
 
-Put Krutrim Cloud credentials in `backend/.env`:
+Required. Put your Krutrim Cloud credentials in `backend/.env`:
 
 ```
 OLA_MAPS_API_KEY=...
@@ -107,14 +110,14 @@ Whitelist `http://localhost:5173`, `http://localhost:8000` and
 `http://127.0.0.1:5173` on the credential's detail page in Krutrim Cloud.
 Nothing needs enabling per API.
 
-The key never reaches the browser — the frontend calls `/geo/autocomplete` and
-`/geo/distance` on this API, which proxies to Ola. Road distance degrades
-Ola → OSRM public server → haversine × 1.25, and every result is labelled with
-its source in the UI.
+Ola Maps powers two things: address autocomplete on signup and the address
+picker, and the road distance behind every delivered price.
 
-Successful lookups persist to `backend/distance_cache.json`, so a restart never
-waits on the network. To precompute every pickup-to-delivery pair (about a
-minute, once):
+The key never reaches the browser — the frontend calls `/geo/autocomplete` and
+`/geo/distance` on this API, which proxies to Ola.
+
+Lookups persist to `backend/distance_cache.json`, so a restart never waits on
+the network. Precompute every pickup-to-delivery pair once (about a minute):
 
 ```bash
 cd backend && ../.venv/bin/python -m scripts.warm_distances
