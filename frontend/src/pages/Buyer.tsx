@@ -1,0 +1,1029 @@
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { api, inr, patch, post } from "../api";
+import { useAuth } from "../auth";
+import { AddressPicker } from "../components/AddressPicker";
+import { ContaminantCaps, type Cap } from "../components/Contaminants";
+import { ChatPanel } from "../components/ChatPanel";
+import {
+  Button,
+  Card,
+  ContactLine,
+  ContaminantCompare,
+  ContaminantTable,
+  CostBreakdown,
+  Empty,
+  Field,
+  HaulPlanCard,
+  KpiRow,
+  Label,
+  Pill,
+  Rating,
+  ScoreBars,
+  SectionTitle,
+  StatusTimeline,
+  Verified,
+  inputClass,
+} from "../ui";
+import type {
+  Bid,
+  Dashboard,
+  Listing,
+  Match,
+  Order,
+  Requirement,
+  Thread,
+} from "../types";
+
+/* --------------------------------------------------------------- overview */
+
+export function BuyerOverview() {
+  const [d, setD] = useState<Dashboard | null>(null);
+  useEffect(() => {
+    api<Dashboard>("/dashboard").then(setD);
+  }, []);
+  if (!d) return <p className="text-sm text-muted">Loading…</p>;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <KpiRow kpis={d.kpis} />
+      <div>
+        <SectionTitle right={<Link to="/requirements" className="text-accent underline">All requirements</Link>}>
+          Best matches right now
+        </SectionTitle>
+        {d.best_matches?.length ? (
+          <div className="flex flex-col gap-3">
+            {d.best_matches.map((m) => (
+              <Card key={`${m.requirement_id}-${m.listing_id}`} className="px-4 py-3">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="font-medium">{m.seller_name}</span>
+                  <Pill>{m.use_case}</Pill>
+                  <span className="tnum ml-auto text-lg font-semibold">
+                    ₹{inr(m.delivered_per_t)}
+                    <span className="text-xs font-normal text-muted">/t delivered</span>
+                  </span>
+                </div>
+                <p className="tnum mt-1 text-sm text-muted">
+                  {m.purity_pct}% · {m.city} · {inr(m.distance_km)} km · score{" "}
+                  {m.score}
+                </p>
+                <Link
+                  to={`/requirements/${m.requirement_id}/matches`}
+                  className="mt-2 inline-block text-sm text-accent underline"
+                >
+                  See the ranking →
+                </Link>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Empty
+            title="No matches yet"
+            hint="Create a requirement and the platform will rank every seller in your region."
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------- requirements */
+
+export function Requirements() {
+  const [rows, setRows] = useState<Requirement[]>([]);
+  const [open, setOpen] = useState(false);
+
+  const load = () =>
+    api<{ requirements: Requirement[] }>("/requirements/mine").then((r) =>
+      setRows(r.requirements),
+    );
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <SectionTitle
+        right={
+          <Button onClick={() => setOpen(!open)}>
+            {open ? "Close" : "+ New requirement"}
+          </Button>
+        }
+      >
+        My requirements
+      </SectionTitle>
+
+      {open && <RequirementForm onSaved={() => { setOpen(false); load(); }} />}
+
+      {rows.length === 0 && !open && (
+        <Empty
+          title="No requirements yet"
+          hint="Tell us what you need and we rank every seller by delivered cost."
+        />
+      )}
+
+      <div className="flex flex-col gap-3">
+        {rows.map((r) => (
+          <Card key={r.id} className="px-4 py-3">
+            <div className="flex flex-wrap items-baseline gap-3">
+              <span className="font-medium">{r.use_case}</span>
+              <Pill>{r.address.city}</Pill>
+              <span className="tnum text-sm text-muted">
+                {inr(r.volume_t)} t/mo · min {r.min_purity_pct}% · budget ₹
+                {inr(r.budget_per_t)}/t
+              </span>
+              <Link
+                to={`/requirements/${r.id}/matches`}
+                className="ml-auto text-sm text-accent underline"
+              >
+                {r.match_count ?? 0} matches →
+              </Link>
+            </div>
+            {r.caps.length > 0 && (
+              <p className="tnum mt-1 text-xs text-muted">
+                caps:{" "}
+                {r.caps.map((c) => `${c.species} ≤ ${c.max_ppm}`).join(" · ")}
+              </p>
+            )}
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RequirementForm({ onSaved }: { onSaved: () => void }) {
+  const { meta } = useAuth();
+  const [addressId, setAddressId] = useState<number | null>(null);
+  const [f, setF] = useState({
+    volume_t: 50,
+    min_purity_pct: 99,
+    budget_per_t: 8000,
+    use_case: "",
+  });
+  const [caps, setCaps] = useState<Cap[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!addressId) return setError("Pick a delivery location.");
+    if (!f.use_case) return setError("Pick a use case.");
+    try {
+      await post("/requirements", { ...f, address_id: addressId, caps });
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  return (
+    <Card className="px-4 py-4">
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Use case">
+            <select
+              className={inputClass}
+              value={f.use_case}
+              onChange={(e) => {
+                const uc = e.target.value;
+                const preset = meta?.use_case_presets[uc];
+                setF({
+                  ...f,
+                  use_case: uc,
+                  min_purity_pct: preset?.min_purity ?? f.min_purity_pct,
+                });
+                if (preset)
+                  setCaps(
+                    Object.entries(preset.caps).map(([s, v]) => ({
+                      species: s,
+                      max_ppm: v,
+                    })),
+                  );
+              }}
+            >
+              <option value="">Select…</option>
+              {(meta?.buyer_categories ?? []).map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </Field>
+          <AddressPicker
+            label="Delivery location"
+            value={addressId}
+            onChange={setAddressId}
+          />
+          <Field label="Volume needed (t/month)">
+            <input
+              type="number"
+              className={inputClass}
+              value={f.volume_t}
+              onChange={(e) => setF({ ...f, volume_t: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Minimum CO₂ purity (%)">
+            <input
+              type="number"
+              step="0.1"
+              className={inputClass}
+              value={f.min_purity_pct}
+              onChange={(e) =>
+                setF({ ...f, min_purity_pct: Number(e.target.value) })
+              }
+            />
+          </Field>
+          <Field label="Budget (₹/tonne delivered)" hint="Includes haulage and any cleanup">
+            <input
+              type="number"
+              className={inputClass}
+              value={f.budget_per_t}
+              onChange={(e) =>
+                setF({ ...f, budget_per_t: Number(e.target.value) })
+              }
+            />
+          </Field>
+        </div>
+
+        <ContaminantCaps
+          useCase={f.use_case}
+          caps={caps}
+          setCaps={setCaps}
+          onPreset={(mp) => setF((x) => ({ ...x, min_purity_pct: mp }))}
+        />
+
+        {error && (
+          <p className="border-l-3 border-stop bg-stop-soft px-3 py-2 text-sm">
+            {error}
+          </p>
+        )}
+        <Button className="self-start">Save requirement</Button>
+      </form>
+    </Card>
+  );
+}
+
+/* --------------------------------------------------------------- matches */
+
+export function Matches() {
+  const { id } = useParams();
+  const [data, setData] = useState<{
+    requirement: Requirement;
+    matches: Match[];
+    considered: number;
+    count: number;
+  } | null>(null);
+
+  useEffect(() => {
+    api<typeof data>(`/match/${id}`).then(setData);
+  }, [id]);
+
+  if (!data) return <p className="text-sm text-muted">Ranking the market…</p>;
+  const r = data.requirement;
+  const purest = data.matches.reduce<Match | null>(
+    (best, m) => (!best || m.purity_pct > best.purity_pct ? m : best),
+    null,
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionTitle right={`${data.count} feasible of ${data.considered} listings`}>
+        {r.use_case} — {inr(r.volume_t)} t/mo into {r.address.city}
+      </SectionTitle>
+
+      <p className="tnum text-sm text-muted">
+        min purity {r.min_purity_pct}% · budget ₹{inr(r.budget_per_t)}/t delivered
+        {r.caps.length > 0 &&
+          ` · caps ${r.caps.map((c) => `${c.species}≤${c.max_ppm}`).join(", ")}`}
+      </p>
+
+      {purest && data.matches[0] && purest.listing_id !== data.matches[0].listing_id && (
+        <div className="border-l-3 border-cool bg-cool-soft px-4 py-3 text-sm">
+          The top match is <strong>not</strong> the purest gas available. At{" "}
+          {purest.purity_pct}%, {purest.seller_name} costs{" "}
+          <strong className="tnum">
+            ₹{inr(purest.delivered_per_t - data.matches[0].delivered_per_t)}/tonne
+            more
+          </strong>{" "}
+          delivered, because it sits {inr(purest.distance_km)} km away against{" "}
+          {inr(data.matches[0].distance_km)} km. Haulage decides this market.
+        </div>
+      )}
+
+      {data.matches.length === 0 && (
+        <Empty
+          title="Nothing clears your spec at this budget"
+          hint="Raise the budget, relax a contaminant cap, or widen the volume."
+        />
+      )}
+
+      <div className="flex flex-col gap-3">
+        {data.matches.map((m, i) => (
+          <MatchCard key={m.listing_id} m={m} rank={i + 1} requirementId={r.id} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MatchCard({
+  m,
+  rank,
+  requirementId,
+}: {
+  m: Match;
+  rank: number;
+  requirementId: number;
+}) {
+  return (
+    <Card className="px-4 py-3">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="tnum font-mono text-sm text-muted">#{rank}</span>
+        <span className="font-medium">{m.seller_name}</span>
+        <span className="text-xs text-muted">{m.seller_category}</span>
+        {m.verified && <Pill tone="good">✓ verified</Pill>}
+        <Rating value={m.seller_rating} />
+        {m.storage_full && <Pill tone="warn">storage nearly full</Pill>}
+        <span className="ml-auto flex items-baseline gap-3">
+          <span className="tnum text-xl font-semibold">
+            ₹{inr(m.delivered_per_t)}
+            <span className="text-xs font-normal text-muted">/t delivered</span>
+          </span>
+          <span className="tnum border border-accent px-2 py-0.5 font-mono text-sm text-accent">
+            {m.score}
+          </span>
+        </span>
+      </div>
+
+      <p className="tnum mt-1 text-sm text-ink-2">
+        {m.purity_pct}% purity · {inr(m.volume_t)} t available ·{" "}
+        {inr(m.distance_km)} km · {m.city} · {m.form} · {m.source_type}
+        {!m.covers_requirement && (
+          <span className="text-accent">
+            {" "}
+            — covers {inr(m.covers_t)} t, pair with another seller
+          </span>
+        )}
+      </p>
+
+      <div className="mt-3 grid gap-4 lg:grid-cols-2">
+        <CostBreakdown m={m} />
+        <div className="flex flex-col gap-3">
+          <HaulPlanCard haul={m.haul} rateSource={m.rate_source} />
+          <ContaminantCompare m={m} />
+        </div>
+      </div>
+
+      <div className="mt-3 border-t border-rule pt-3">
+        <ScoreBars fits={m.fits} />
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <Link
+          to={`/listings/${m.listing_id}?requirement=${requirementId}`}
+          className="border border-rule-strong px-3 py-1.5 text-sm hover:border-accent hover:text-accent"
+        >
+          View listing
+        </Link>
+        <Link
+          to={`/listings/${m.listing_id}?requirement=${requirementId}#chat`}
+          className="border border-rule-strong px-3 py-1.5 text-sm hover:border-accent hover:text-accent"
+        >
+          Message seller
+        </Link>
+      </div>
+    </Card>
+  );
+}
+
+/* ---------------------------------------------------------------- browse */
+
+export function Browse() {
+  const { region } = useAuth();
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [reqs, setReqs] = useState<Requirement[]>([]);
+  const [f, setF] = useState({ min_purity: "", min_volume: "", max_price: "", form: "" });
+
+  useEffect(() => {
+    api<{ requirements: Requirement[] }>("/requirements/mine").then((r) =>
+      setReqs(r.requirements),
+    );
+  }, []);
+
+  useEffect(() => {
+    const qs = new URLSearchParams({ region });
+    Object.entries(f).forEach(([k, v]) => v && qs.set(k, v));
+    api<{ listings: Listing[] }>(`/listings?${qs}`).then((r) => setListings(r.listings));
+  }, [region, f]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionTitle right={`${listings.length} listings`}>Marketplace</SectionTitle>
+
+      <Card className="flex flex-wrap items-end gap-3 px-4 py-3">
+        <Field label="Min purity %">
+          <input
+            className={`${inputClass} w-24`}
+            value={f.min_purity}
+            onChange={(e) => setF({ ...f, min_purity: e.target.value })}
+          />
+        </Field>
+        <Field label="Min volume t">
+          <input
+            className={`${inputClass} w-24`}
+            value={f.min_volume}
+            onChange={(e) => setF({ ...f, min_volume: e.target.value })}
+          />
+        </Field>
+        <Field label="Max ₹/t ex-works">
+          <input
+            className={`${inputClass} w-28`}
+            value={f.max_price}
+            onChange={(e) => setF({ ...f, max_price: e.target.value })}
+          />
+        </Field>
+        <Field label="Form">
+          <select
+            className={inputClass}
+            value={f.form}
+            onChange={(e) => setF({ ...f, form: e.target.value })}
+          >
+            <option value="">Any</option>
+            <option value="liquid">Liquid</option>
+            <option value="gas">Gas</option>
+          </select>
+        </Field>
+        <p className="ml-auto max-w-xs text-xs text-muted">
+          Delivered price and contaminant fit are computed against a
+          requirement — open one from{" "}
+          <Link to="/requirements" className="text-accent underline">
+            My requirements
+          </Link>
+          .
+        </p>
+      </Card>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {listings.map((l) => (
+          <Card key={l.id} className="px-4 py-3">
+            <div className="flex items-baseline gap-2">
+              <span className="font-medium">{l.seller.name}</span>
+              {l.seller.is_verified && <Pill tone="good">✓</Pill>}
+              {l.storage_full && <Pill tone="warn">urgent</Pill>}
+              <span className="tnum ml-auto text-sm">
+                ₹{inr(l.price_per_t)}
+                <span className="text-xs text-muted">/t ex-works</span>
+              </span>
+            </div>
+            <p className="tnum mt-1 text-sm text-muted">
+              {l.purity_pct}% · {inr(l.volume_t)} t/mo · {l.form} ·{" "}
+              {l.address.city}
+            </p>
+            <div className="mt-2 flex gap-2">
+              <Link
+                to={`/listings/${l.id}${reqs[0] ? `?requirement=${reqs[0].id}` : ""}`}
+                className="text-sm text-accent underline"
+              >
+                View & message →
+              </Link>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------- listing detail */
+
+export function ListingDetail() {
+  const { id } = useParams();
+  const requirementId = new URLSearchParams(window.location.search).get("requirement");
+  const [l, setL] = useState<Listing | null>(null);
+  const [thread, setThread] = useState<Thread | null>(null);
+  const [bidOpen, setBidOpen] = useState(false);
+
+  const load = () =>
+    api<Listing>(
+      `/listings/${id}${requirementId ? `?requirement_id=${requirementId}` : ""}`,
+    ).then(setL);
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const openChat = async () => {
+    const t = await post<Thread>("/threads", { listing_id: Number(id) });
+    setThread(t);
+  };
+
+  if (!l) return <p className="text-sm text-muted">Loading…</p>;
+  const caps = Object.fromEntries(
+    (l.requirement?.caps ?? []).map((c) => [c.species, c.max_ppm]),
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionTitle right={`listing #${l.id}`}>
+        {l.purity_pct}% CO₂ · {inr(l.volume_t)} t/mo · {l.address.city}
+      </SectionTitle>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
+        <div className="flex flex-col gap-4">
+          {l.evaluation && (
+            <Card className="px-4 py-3">
+              <Label>Delivered cost for your requirement</Label>
+              <div className="mt-2 grid gap-4 lg:grid-cols-2">
+                <CostBreakdown m={l.evaluation} />
+                <HaulPlanCard
+                  haul={l.evaluation.haul}
+                  rateSource={l.evaluation.rate_source}
+                />
+              </div>
+            </Card>
+          )}
+
+          <Card className="px-4 py-3">
+            <Label>Gas analysis</Label>
+            <div className="mt-2">
+              <ContaminantTable
+                rows={l.contaminants}
+                caps={l.requirement ? caps : undefined}
+              />
+            </div>
+            <p className="tnum mt-2 text-xs text-muted">
+              Unaccounted balance {inr(l.unaccounted_ppm)} ppm · lab report{" "}
+              {l.lab_report || "—"}
+            </p>
+          </Card>
+
+          <Card className="px-4 py-3 text-sm">
+            <Label>Supply terms</Label>
+            <p className="tnum mt-2 text-ink-2">
+              ₹{inr(l.price_per_t)}/t ex-works · available from{" "}
+              {l.available_from} · {l.form} · captured by {l.source_type} ·{" "}
+              pickup at {l.address.label}, {l.address.city}
+            </p>
+          </Card>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <Card className="px-4 py-3">
+            <div className="flex items-baseline gap-2">
+              <span className="font-medium">{l.seller.name}</span>
+              <Rating value={l.seller.rating} />
+            </div>
+            <p className="text-xs text-muted">{l.seller.category}</p>
+            <div className="mt-2">
+              <Verified company={l.seller} />
+            </div>
+            <div className="mt-3">
+              <ContactLine company={l.seller} />
+            </div>
+            <div className="mt-3 flex flex-col gap-2">
+              <Button variant="ghost" onClick={openChat}>
+                Message seller
+              </Button>
+              {l.requirement && (
+                <Button onClick={() => setBidOpen(!bidOpen)}>
+                  {bidOpen ? "Close" : "Place bid"}
+                </Button>
+              )}
+            </div>
+          </Card>
+
+          {bidOpen && l.requirement && (
+            <BidForm
+              listing={l}
+              requirementId={l.requirement.id}
+              onDone={() => setBidOpen(false)}
+            />
+          )}
+        </div>
+      </div>
+
+      {thread && (
+        <Card className="h-[26rem]" >
+          <ChatPanel threadId={thread.id} onThreadChange={() => load()} />
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function BidForm({
+  listing,
+  requirementId,
+  onDone,
+}: {
+  listing: Listing;
+  requirementId: number;
+  onDone: () => void;
+}) {
+  const [volume, setVolume] = useState(
+    Math.min(listing.volume_t, listing.requirement?.volume_t ?? listing.volume_t),
+  );
+  const [price, setPrice] = useState(listing.price_per_t);
+  const [note, setNote] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await post("/bids", {
+        listing_id: listing.id,
+        requirement_id: requirementId,
+        volume_t: volume,
+        price_per_t: price,
+        note,
+      });
+      setMsg("Bid sent. The seller sees it on their dashboard.");
+      setTimeout(onDone, 1200);
+    } catch (err) {
+      setMsg((err as Error).message);
+    }
+  };
+
+  return (
+    <Card className="px-4 py-3">
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <Label>Place a bid</Label>
+        <Field label="Volume (t)">
+          <input
+            type="number"
+            className={inputClass}
+            value={volume}
+            onChange={(e) => setVolume(Number(e.target.value))}
+          />
+        </Field>
+        <Field label="Your price (₹/t ex-works)" hint={`Asking ₹${inr(listing.price_per_t)}`}>
+          <input
+            type="number"
+            className={inputClass}
+            value={price}
+            onChange={(e) => setPrice(Number(e.target.value))}
+          />
+        </Field>
+        <Field label="Note">
+          <input
+            className={inputClass}
+            placeholder="3-month contract if the rate holds"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </Field>
+        {msg && <p className="text-sm text-good">{msg}</p>}
+        <Button>Send bid</Button>
+      </form>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------ bids/orders */
+
+export function BuyerBids() {
+  const [bids, setBids] = useState<Bid[]>([]);
+  useEffect(() => {
+    api<{ bids: Bid[] }>("/bids/mine").then((r) => setBids(r.bids));
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionTitle>My bids</SectionTitle>
+      {bids.length === 0 && <Empty title="No bids yet" hint="Open a match and place one." />}
+      <div className="flex flex-col gap-3">
+        {bids.map((b) => (
+          <Card key={b.id} className="px-4 py-3">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="font-medium">{b.seller.name}</span>
+              <span className="text-xs text-muted">
+                listing #{b.listing.id} · {b.listing.purity_pct}% ·{" "}
+                {b.listing.city}
+              </span>
+              <Pill
+                tone={
+                  b.status === "accepted"
+                    ? "good"
+                    : b.status === "rejected"
+                      ? "stop"
+                      : "neutral"
+                }
+              >
+                {b.status}
+              </Pill>
+              <span className="tnum ml-auto text-sm">
+                {inr(b.volume_t)} t @ ₹{inr(b.price_per_t)}/t
+              </span>
+            </div>
+            {b.haul && (
+              <p className="tnum mt-1 text-xs text-muted">
+                {b.haul.truck} × {b.haul.trips} · {inr(b.distance_km)} km ·
+                delivered ₹{inr(b.delivered_per_t)}/t
+              </p>
+            )}
+            {b.note && <p className="mt-1 text-sm text-ink-2">“{b.note}”</p>}
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function OrdersPage({ seller = false }: { seller?: boolean }) {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const load = () => api<{ orders: Order[] }>("/orders/mine").then((r) => setOrders(r.orders));
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionTitle right={`${orders.length} orders`}>
+        {seller ? "Approved orders" : "My orders"}
+      </SectionTitle>
+      {orders.length === 0 && (
+        <Empty
+          title="No orders yet"
+          hint={seller ? "Accept a bid and it appears here." : "Once a seller accepts your bid it appears here."}
+        />
+      )}
+      <div className="flex flex-col gap-4">
+        {orders.map((o) => (
+          <OrderCard key={o.id} o={o} onChange={load} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function OrderCard({ o, onChange }: { o: Order; onChange: () => void }) {
+  const [pickupOpen, setPickupOpen] = useState(false);
+  const next = { accepted: "pickup_scheduled", pickup_scheduled: "in_transit", in_transit: "delivered" }[
+    o.status
+  ];
+
+  return (
+    <Card className="px-4 py-3">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="font-mono text-sm text-muted">#{o.id}</span>
+        <span className="font-medium">{o.counterpart.name}</span>
+        <span className="text-xs text-muted">{o.counterpart.category}</span>
+        <Rating value={o.counterpart.rating} />
+        <Pill tone={o.status === "delivered" ? "good" : "warn"}>
+          {o.status.replace("_", " ")}
+        </Pill>
+        <span className="tnum ml-auto text-sm">
+          {inr(o.volume_t)} t @ ₹{inr(o.price_per_t)}/t · ₹{inr(o.total_value)}
+        </span>
+      </div>
+
+      <div className="mt-4 max-w-md">
+        <StatusTimeline status={o.status} />
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        {o.haul && <HaulPlanCard haul={o.haul} />}
+        <div className="flex flex-col gap-2">
+          <div className="border border-rule bg-surface-2 px-3 py-2">
+            <Label>Pickup</Label>
+            {o.pickup ? (
+              <>
+                <p className="mt-1 text-sm font-medium">
+                  {o.pickup.scheduled_date}, {o.pickup.slot}
+                </p>
+                <p className="text-sm text-ink-2">
+                  {o.pickup.address.label}, {o.pickup.address.city} ·{" "}
+                  {o.pickup.vehicle_type}
+                </p>
+                <p className="tnum text-xs text-muted">
+                  {o.pickup.contact_name} · {o.pickup.contact_phone}
+                </p>
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-muted">
+                {o.viewer_is_seller
+                  ? "Not scheduled yet — set a date and slot."
+                  : "The seller has not scheduled the pickup yet."}
+              </p>
+            )}
+          </div>
+          <div className="border-l-3 border-cool bg-cool-soft px-3 py-2 text-sm">
+            <span className="tnum font-mono">{o.counterpart.phone}</span>
+            <Pill tone="good">unmasked — deal accepted</Pill>
+          </div>
+        </div>
+      </div>
+
+      {o.viewer_is_seller && (
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-rule pt-3">
+          <Button variant="ghost" onClick={() => setPickupOpen(!pickupOpen)}>
+            {o.pickup ? "Reschedule pickup" : "Schedule pickup"}
+          </Button>
+          {next && (
+            <Button
+              onClick={async () => {
+                await patch(`/orders/${o.id}/status`, { status: next });
+                onChange();
+              }}
+              disabled={!o.pickup && next !== "pickup_scheduled"}
+            >
+              Mark {next.replace("_", " ")} →
+            </Button>
+          )}
+        </div>
+      )}
+
+      {pickupOpen && (
+        <PickupForm
+          orderId={o.id}
+          onDone={() => {
+            setPickupOpen(false);
+            onChange();
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+function PickupForm({ orderId, onDone }: { orderId: number; onDone: () => void }) {
+  const [sug, setSug] = useState<import("../types").HaulSuggestion | null>(null);
+  const [f, setF] = useState({
+    address_id: 0,
+    scheduled_date: new Date(Date.now() + 864e5).toISOString().slice(0, 10),
+    slot: "",
+    vehicle_type: "",
+    contact_name: "",
+    contact_phone: "",
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<import("../types").HaulSuggestion>(`/orders/${orderId}/haul-suggestion`).then((s) => {
+      setSug(s);
+      setF((x) => ({
+        ...x,
+        address_id: s.default_address_id,
+        slot: s.slots[1] ?? s.slots[0],
+        vehicle_type: s.haul?.truck ?? s.vehicle_types[0],
+      }));
+    });
+  }, [orderId]);
+
+  if (!sug) return <p className="mt-3 text-sm text-muted">Loading haul plan…</p>;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await post(`/orders/${orderId}/pickup`, f);
+      onDone();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="mt-3 border-t border-rule pt-3">
+      <p className="mb-2 text-sm text-ink-2">
+        Same haul plan the buyer priced — the tanker type is pre-selected from it.
+      </p>
+      {sug.haul && <HaulPlanCard haul={sug.haul} />}
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <Field label="Date">
+          <input
+            type="date"
+            className={inputClass}
+            value={f.scheduled_date}
+            onChange={(e) => setF({ ...f, scheduled_date: e.target.value })}
+          />
+        </Field>
+        <Field label="Time slot">
+          <select
+            className={inputClass}
+            value={f.slot}
+            onChange={(e) => setF({ ...f, slot: e.target.value })}
+          >
+            {sug.slots.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Pickup site">
+          <select
+            className={inputClass}
+            value={f.address_id}
+            onChange={(e) => setF({ ...f, address_id: Number(e.target.value) })}
+          >
+            {sug.pickup_addresses.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label} — {a.city}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Tanker type">
+          <select
+            className={inputClass}
+            value={f.vehicle_type}
+            onChange={(e) => setF({ ...f, vehicle_type: e.target.value })}
+          >
+            {sug.vehicle_types.map((v) => (
+              <option key={v}>{v}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="On-site contact">
+          <input
+            required
+            className={inputClass}
+            placeholder="Ramesh K."
+            value={f.contact_name}
+            onChange={(e) => setF({ ...f, contact_name: e.target.value })}
+          />
+        </Field>
+        <Field label="Contact phone">
+          <input
+            required
+            className={inputClass}
+            placeholder="+91 ..."
+            value={f.contact_phone}
+            onChange={(e) => setF({ ...f, contact_phone: e.target.value })}
+          />
+        </Field>
+      </div>
+      {error && (
+        <p className="mt-2 border-l-3 border-stop bg-stop-soft px-3 py-2 text-sm">
+          {error}
+        </p>
+      )}
+      <Button className="mt-3">Confirm pickup</Button>
+    </form>
+  );
+}
+
+/* -------------------------------------------------------------- profile */
+
+export function Profile() {
+  const { me } = useAuth();
+  const nav = useNavigate();
+  if (!me) return null;
+  const isSeller = me.user.role === "emitter";
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionTitle>Company profile</SectionTitle>
+      <Card className="px-4 py-3">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <span className="text-lg font-semibold">{me.company.name}</span>
+          <Verified company={me.company} />
+          <Rating value={me.company.rating} />
+        </div>
+        <p className="tnum mt-1 text-sm text-muted">
+          {me.company.category} · {me.company.phone} · GSTIN {me.company.gstin} ·{" "}
+          {me.user.email}
+        </p>
+      </Card>
+
+      <Card className="px-4 py-3">
+        <div className="flex items-baseline">
+          <Label>{isSeller ? "Storage sites" : "Delivery locations"}</Label>
+          <span className="ml-auto text-xs text-muted">
+            these fill the dropdowns on every form
+          </span>
+        </div>
+        <ul className="mt-2">
+          {me.addresses.map((a) => (
+            <li
+              key={a.id}
+              className="tnum flex items-baseline gap-2 border-b border-rule py-1.5 text-sm last:border-0"
+            >
+              <span className="font-medium">{a.label}</span>
+              <span className="text-muted">
+                {a.city}, {a.state} · {a.lat.toFixed(3)}, {a.lng.toFixed(3)}
+              </span>
+              {a.is_default && <Pill>default</Pill>}
+            </li>
+          ))}
+        </ul>
+        <Button
+          variant="ghost"
+          className="mt-3"
+          onClick={() => nav(isSeller ? "/listings/new" : "/requirements")}
+        >
+          Add one while creating {isSeller ? "a listing" : "a requirement"}
+        </Button>
+      </Card>
+
+      {isSeller && (
+        <Card className="px-4 py-3">
+          <Label>Capture methods</Label>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {me.capture_methods.map((m) => (
+              <Pill key={m}>{m}</Pill>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* Industrial instrument-panel palette: steel neutrals with a blue bias,
+   one sodium-amber accent, semantic colours kept separate from it. */
+@theme {
+  --color-ground: #eef1f4;
+  --color-surface: #ffffff;
+  --color-surface-2: #f5f7f9;
+  --color-ink: #121a21;
+  --color-ink-2: #3d4b57;
+  --color-muted: #6a7a87;
+  --color-rule: #d2dae1;
+  --color-rule-strong: #b6c2cc;
+  --color-accent: #a8510a;
+  --color-accent-soft: #fbeedf;
+  --color-cool: #1c5563;
+  --color-cool-soft: #e2eff2;
+  --color-good: #1d6b48;
+  --color-good-soft: #e6f2ec;
+  --color-stop: #9c2c1e;
+  --color-stop-soft: #fbe7e3;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+html, body, #root { height: 100%; }
+body {
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numbers in tables and money figures should line up. */
+.tnum { font-variant-numeric: tabular-nums; }
