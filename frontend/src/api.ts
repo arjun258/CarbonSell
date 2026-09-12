@@ -41,13 +41,19 @@ export const post = <T,>(path: string, body: unknown) =>
 export const patch = <T,>(path: string, body: unknown) =>
   api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 
-/** Indian-format money, no decimals: 1,05,480 */
+/** Indian-format number. Whole values print whole; anything with a
+ *  fraction keeps it, so a figure is never quietly rounded off. */
 export function inr(n: number | null | undefined): string {
   if (n === null || n === undefined) return "—";
-  return n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+  return Number.isInteger(n)
+    ? n.toLocaleString("en-IN")
+    : n.toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
 }
 
 export function ppm(n: number): string {
   if (n >= 10000) return `${(n / 10000).toFixed(2)}%`;
-  return `${Math.round(n).toLocaleString("en-IN")} ppm`;
+  return `${inr(n)} ppm`;
 }

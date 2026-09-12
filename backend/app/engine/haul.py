@@ -20,8 +20,10 @@ def cheapest_haul(volume_t: float, road_km: float) -> dict:
             "capacity_t": truck["cap_t"],
             "trips": trips,
             "distance_km": round(road_km, 1),
-            "total_cost": round(cost),
-            "cost_per_t": round(cost / volume_t) if volume_t else 0,
+            # Money is reported as it falls out of the arithmetic, to the
+            # paisa. Nothing is rounded to a whole rupee.
+            "total_cost": round(cost, 2),
+            "cost_per_t": round(cost / volume_t, 2) if volume_t else 0.0,
         }
         if best is None or (plan["total_cost"], plan["trips"]) < (
             best["total_cost"], best["trips"]

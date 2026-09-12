@@ -72,17 +72,16 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
     delivered = supply.price_per_t + haul["cost_per_t"]
     total_cost = delivered * moved_t
 
-    price_fit = _clamp01(
-        (demand.budget_per_t - supply.price_per_t) / demand.budget_per_t
-    )
+    # Every fit answers the same question: how close is this to what the
+    # buyer actually asked for? Exactly on spec scores 1.0; drifting away
+    # from the stated figure scores lower, in either direction.
+    price_fit = _clamp01(supply.price_per_t / demand.budget_per_t)
 
-    # Headroom above the buyer's floor, so a cleaner stream still reads as
-    # better without anyone paying for the difference.
     headroom = 100.0 - demand.min_purity_pct
     purity_fit = (
         1.0
         if headroom <= 0
-        else _clamp01((supply.purity_pct - demand.min_purity_pct) / headroom)
+        else _clamp01(1 - (supply.purity_pct - demand.min_purity_pct) / headroom)
     )
     volume_fit = _clamp01(supply.volume_t / demand.volume_t)
     distance_fit = _clamp01(1 - km / config.DISTANCE_FIT_CEILING_KM)
@@ -111,12 +110,12 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
         "source_type": supply.source_type,
         "storage_full": supply.storage_full,
         "score": round(score, 1),
-        "delivered_per_t": round(delivered),
-        "total_cost": round(total_cost),
-        "covers_t": round(moved_t, 1),
+        "delivered_per_t": round(delivered, 2),
+        "total_cost": round(total_cost, 2),
+        "covers_t": round(moved_t, 2),
         "covers_requirement": supply.volume_t >= demand.volume_t,
         "breakdown": {
-            "listing_per_t": round(supply.price_per_t),
+            "listing_per_t": round(supply.price_per_t, 2),
             "haul_per_t": haul["cost_per_t"],
         },
         "haul": haul,
@@ -136,6 +135,21 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
 
 def rank(supplies: list[Supply], demand: Demand) -> list[dict]:
     scored = [m for s in supplies if (m := evaluate(s, demand)) is not None]
+
+    # Distance is the one factor the buyer sets no target for, so it is
+    # scored against the closest seller who actually qualifies: the nearest
+    # option is 1.0 and everything else is judged by how near it comes.
+    if scored:
+        nearest = min(m["distance_km"] for m in scored) or 1.0
+        w = config.SCORE_WEIGHTS
+        for m in scored:
+            m["fits"]["distance"] = round(
+                _clamp01(nearest / m["distance_km"]) if m["distance_km"] else 1.0, 3
+            )
+            m["score"] = round(
+                100 * sum(w[k] * m["fits"][k] for k in w), 1
+            )
+
     # Emergency offers surface first among equals: an emitter with full
     # storage is discounting for a reason.
     scored.sort(key=lambda m: (-m["score"], not m["storage_full"]))

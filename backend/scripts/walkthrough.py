@@ -3,13 +3,23 @@
 Proves the API can carry the demo: match -> chat -> contact reveal ->
 bid -> accept -> pickup -> status, from both sides.
 
+Reseeds first, so it is deterministic no matter what is in the database
+when you run it - and leaves behind the deals it creates.
+
 Run from backend/:  ../.venv/bin/python -m scripts.walkthrough
 """
+import contextlib
+import io
 import sys
 
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.seed import run as reseed
+
+print("reseeding for a clean run...")
+with contextlib.redirect_stdout(io.StringIO()):
+    reseed()
 
 c = TestClient(app)
 FAILS: list[str] = []
@@ -39,7 +49,7 @@ check("unauthenticated call is rejected", c.get("/me").status_code == 401)
 
 print("\n2. ranked matches")
 reqs = c.get("/requirements/mine", headers=buyer).json()["requirements"]
-req = min(reqs, key=lambda r: r["min_purity_pct"])   # the Nagpur precast order
+req = reqs[-1]   # the seeded Nagpur precast order
 m = c.get(f"/match/{req['id']}", headers=buyer).json()
 top = m["matches"][0]
 purest = max(m["matches"], key=lambda x: x["purity_pct"])
