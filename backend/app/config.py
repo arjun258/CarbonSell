@@ -8,7 +8,7 @@ from pathlib import Path
 # ---------------------------------------------------------------- app
 APP_NAME = "CarbonSell"
 BASE_DIR = Path(__file__).resolve().parent.parent
-DB_URL = f"sqlite:///{BASE_DIR / 'carbonx.db'}"
+DB_URL = f"sqlite:///{BASE_DIR / 'carbonsell.db'}"
 JWT_ALGORITHM = "HS256"
 JWT_TTL_HOURS = 24
 

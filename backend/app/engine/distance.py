@@ -14,7 +14,7 @@ import httpx
 
 from .. import config
 
-log = logging.getLogger("carbonx.distance")
+log = logging.getLogger("carbonsell.distance")
 
 CACHE_PATH = config.BASE_DIR / "distance_cache.json"
 _token: dict[str, float | str] = {}

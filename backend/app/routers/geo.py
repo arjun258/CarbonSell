@@ -9,7 +9,7 @@ from .. import config
 from ..engine.distance import _ola_bearer, road_km
 
 router = APIRouter(tags=["geo"])
-log = logging.getLogger("carbonx.geo")
+log = logging.getLogger("carbonsell.geo")
 
 
 @router.get("/geo/autocomplete")
