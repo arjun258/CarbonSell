@@ -6,9 +6,21 @@ from .routers import auth, chat, dashboard, deals, geo, market
 
 app = FastAPI(title=f"{config.APP_NAME} API", version="0.1.0")
 
+# Reachable from the machine it runs on and from anything on the same
+# private network - a demo usually means a second laptop and a phone. Public
+# addresses are not matched.
+LAN_ORIGIN = (
+    r"http://(localhost|127\.0\.0\.1|\[::1\]"
+    r"|10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|192\.168\.\d{1,3}\.\d{1,3}"
+    r"|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"
+    r"|[A-Za-z0-9-]+\.local)"
+    r"(:\d+)?"
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origin_regex=LAN_ORIGIN,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
