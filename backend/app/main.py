@@ -40,6 +40,5 @@ def meta():
         "capture_methods": config.CAPTURE_METHODS,
         "species": config.SPECIES,
         "pickup_slots": config.PICKUP_SLOTS,
-        "use_case_presets": config.USE_CASE_PRESETS,
         "trucks": config.TRUCKS,
     }

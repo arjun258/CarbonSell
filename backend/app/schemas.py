@@ -65,8 +65,11 @@ class RequirementIn(BaseModel):
     volume_t: float
     min_purity_pct: float
     budget_per_t: float
-    use_case: str
     caps: list[CapIn] = []
+
+
+class CaptureMethodIn(BaseModel):
+    method: str = Field(min_length=2, max_length=60)
 
 
 class BidIn(BaseModel):
@@ -148,7 +151,7 @@ def requirement_out(r: Requirement) -> dict:
     return {
         "id": r.id, "company_id": r.company_id, "address": address_out(r.address),
         "volume_t": r.volume_t, "min_purity_pct": r.min_purity_pct,
-        "budget_per_t": r.budget_per_t, "use_case": r.use_case,
+        "budget_per_t": r.budget_per_t,
         "caps": [{"species": c.species, "max_ppm": c.max_ppm} for c in r.caps],
     }
 

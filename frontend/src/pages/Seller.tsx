@@ -172,6 +172,7 @@ export function NewListing() {
     { species: "H2S", ppm: 3 },
   ]);
   const [error, setError] = useState<string | null>(null);
+  const [methodOpen, setMethodOpen] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,18 +208,28 @@ export function NewListing() {
                 value={addressId}
                 onChange={setAddressId}
               />
-              <Field label="Captured by">
-                <select
-                  className={inputClass}
-                  value={f.source_type}
-                  onChange={(e) => setF({ ...f, source_type: e.target.value })}
-                >
-                  <option value="">Select…</option>
-                  {(me?.capture_methods ?? []).map((m) => (
-                    <option key={m}>{m}</option>
-                  ))}
-                </select>
-              </Field>
+              <div className="flex flex-col gap-1">
+                <Label>Captured by</Label>
+                <div className="flex gap-2">
+                  <select
+                    className={`${inputClass} flex-1`}
+                    value={f.source_type}
+                    onChange={(e) => setF({ ...f, source_type: e.target.value })}
+                  >
+                    <option value="">Select…</option>
+                    {(me?.capture_methods ?? []).map((m) => (
+                      <option key={m}>{m}</option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    onClick={() => setMethodOpen(true)}
+                  >
+                    + Add new method
+                  </Button>
+                </div>
+              </div>
               <Field label="Volume available (t/month)">
                 <input
                   type="number"
@@ -297,6 +308,13 @@ export function NewListing() {
             )}
             <Button className="self-start">Publish listing</Button>
           </form>
+
+          {methodOpen && (
+            <AddCaptureMethodModal
+              onClose={() => setMethodOpen(false)}
+              onSaved={(method) => setF((x) => ({ ...x, source_type: method }))}
+            />
+          )}
         </Card>
 
         <Card className="px-4 py-3">
@@ -329,6 +347,98 @@ export function NewListing() {
             <ContaminantTable rows={rows} />
           </div>
         </Card>
+      </div>
+    </div>
+  );
+}
+
+/** Same idea as the address modal: never leave a half-written listing to
+ *  record a capture method. */
+function AddCaptureMethodModal({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: (method: string) => void;
+}) {
+  const { me, meta, refresh } = useAuth();
+  const [value, setValue] = useState("");
+  const [custom, setCustom] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const suggestions = (meta?.capture_methods ?? []).filter(
+    (m) => !(me?.capture_methods ?? []).includes(m),
+  );
+
+  const save = async () => {
+    const method = (value === "__custom" ? custom : value).trim();
+    if (!method) return setError("Pick a method or name your own.");
+    setBusy(true);
+    setError(null);
+    try {
+      await post("/capture-methods", { method });
+      await refresh();
+      onSaved(method);
+      onClose();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-4 pt-24">
+      <div className="w-full max-w-md border border-rule-strong bg-surface shadow-lg">
+        <div className="flex items-baseline gap-3 border-b border-rule px-4 py-3">
+          <h3 className="font-semibold">Add a capture method</h3>
+          <span className="ml-auto text-xs text-muted">
+            Stays on this page
+          </span>
+        </div>
+        <div className="flex flex-col gap-3 px-4 py-4">
+          <Field label="Method">
+            <select
+              autoFocus
+              className={inputClass}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+            >
+              <option value="">Select…</option>
+              {suggestions.map((m) => (
+                <option key={m}>{m}</option>
+              ))}
+              <option value="__custom">Something else…</option>
+            </select>
+          </Field>
+          {value === "__custom" && (
+            <Field label="Name it">
+              <input
+                className={inputClass}
+                placeholder="e.g. Calcium looping"
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+              />
+            </Field>
+          )}
+          {error && (
+            <p className="border-l-3 border-stop bg-stop-soft px-3 py-2 text-sm">
+              {error}
+            </p>
+          )}
+          <p className="text-xs text-muted">
+            It is saved to your profile, so every future listing offers it too.
+          </p>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-rule px-4 py-3">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={save} disabled={busy}>
+            {busy ? "Saving…" : "Save method"}
+          </Button>
+        </div>
       </div>
     </div>
   );

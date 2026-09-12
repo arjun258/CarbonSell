@@ -76,7 +76,7 @@ def my_bids(user: User = Depends(current_user), db: Session = Depends(get_db)):
             },
             "buyer": company_out(b.buyer, reveal_phone=(b.status == "accepted")),
             "seller": company_out(listing.company, reveal_phone=(b.status == "accepted")),
-            "use_case": req.use_case,
+            "use_case": b.buyer.category,
             "delivery_city": req.address.city,
             "distance_km": ev["distance_km"] if ev else None,
             "haul": ev["haul"] if ev else None,

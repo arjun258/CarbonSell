@@ -177,9 +177,8 @@ export function ContactLine({
 
 const FIT_LABELS: Record<string, string> = {
   price: "Price",
-  purity: "Purity",
   distance: "Distance",
-  contaminant: "Contam.",
+  purity: "Purity",
   volume: "Volume",
   rating: "Rating",
 };
@@ -209,24 +208,11 @@ export function ScoreBars({ fits }: { fits: Record<string, number> }) {
 
 export function CostBreakdown({ m }: { m: Match }) {
   const rows = [
-    ["Listing price", m.breakdown.listing_per_t, ""],
+    ["Product", m.breakdown.listing_per_t, `${m.purity_pct}% CO₂, ex-works`],
     [
       "Haulage",
       m.breakdown.haul_per_t,
       `${m.haul.truck} (${m.haul.capacity_t} t) × ${m.haul.trips}`,
-    ],
-    [
-      "Purification",
-      m.breakdown.purification_per_t,
-      m.purity_gap > 0 ? `${m.purity_pct}% → +${m.purity_gap.toFixed(1)} pts` : "",
-    ],
-    [
-      "Contaminant cleanup",
-      m.breakdown.cleanup_per_t,
-      m.contaminant_detail
-        .filter((d) => d.over)
-        .map((d) => `${d.species} ${Math.round(d.actual_ppm)}→${d.cap_ppm}`)
-        .join(", "),
     ],
   ] as const;
 
@@ -285,7 +271,8 @@ export function ContaminantCompare({ m }: { m: Match }) {
   if (!m.contaminant_detail.length) {
     return (
       <p className="text-xs text-muted">
-        No contaminant caps on this requirement.
+        No contaminant limits set on this requirement — every stream qualifies
+        on composition.
       </p>
     );
   }
@@ -297,11 +284,7 @@ export function ContaminantCompare({ m }: { m: Match }) {
           <span className={d.over ? "text-accent" : "text-muted"}>
             {Math.round(d.actual_ppm)}
           </span>
-          {d.over ? (
-            <span className="text-accent"> ⚠ cap {d.cap_ppm}</span>
-          ) : (
-            <span className="text-good"> ✓</span>
-          )}
+          <span className="text-good"> ✓ under {d.cap_ppm}</span>
         </span>
       ))}
     </div>

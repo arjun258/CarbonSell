@@ -7,8 +7,8 @@ genuinely impossible matches disappear.
 from dataclasses import dataclass, field
 
 from .. import config
-from .cleanup import INFEASIBLE, contaminant_cleanup, purification_cost
 from .distance import road_km
+from .spec import contaminant_check, meets_purity
 from .haul import cheapest_haul
 
 
@@ -37,7 +37,6 @@ class Demand:
     volume_t: float
     min_purity_pct: float
     budget_per_t: float
-    use_case: str
     lat: float
     lng: float
     caps: dict[str, float] = field(default_factory=dict)
@@ -48,40 +47,46 @@ def _clamp01(x: float) -> float:
 
 
 def evaluate(supply: Supply, demand: Demand) -> dict | None:
-    """Full economics for one supply/demand pair. None means infeasible."""
+    """Full economics for one supply/demand pair. None means it cannot be used.
+
+    Delivered cost is the seller's price plus haulage. Purity and any
+    declared contaminant caps are pass/fail: we do not price a clean-up we
+    are not offering to do.
+    """
+    if not meets_purity(supply.purity_pct, demand.min_purity_pct):
+        return None
+
+    passes, contaminant_detail = contaminant_check(supply.contaminants, demand.caps)
+    if not passes:
+        return None
+
     km, source = road_km(supply.lat, supply.lng, demand.lat, demand.lng)
     moved_t = min(supply.volume_t, demand.volume_t)
     haul = cheapest_haul(moved_t, km)
 
-    purify_per_t, purity_gap = purification_cost(supply.purity_pct, demand.min_purity_pct)
-    if purify_per_t == INFEASIBLE:
-        return None
-
-    cleanup_per_t, contaminant_detail = contaminant_cleanup(supply.contaminants, demand.caps)
-    if cleanup_per_t == INFEASIBLE:
-        return None
-
-    delivered = supply.price_per_t + haul["cost_per_t"] + purify_per_t + cleanup_per_t
+    delivered = supply.price_per_t + haul["cost_per_t"]
 
     price_fit = _clamp01((demand.budget_per_t - delivered) / demand.budget_per_t)
-    purity_fit = 1.0 if purity_gap == 0 else _clamp01(1 - purity_gap / config.PURITY_GAP_CEILING)
-    contaminant_fit = (
-        1.0 if cleanup_per_t == 0
-        else _clamp01(1 - cleanup_per_t / config.CLEANUP_FIT_SCALE)
+    if price_fit == 0:
+        return None
+
+    # Headroom above the buyer's floor, so a cleaner stream still reads as
+    # better without anyone paying for the difference.
+    headroom = 100.0 - demand.min_purity_pct
+    purity_fit = (
+        1.0
+        if headroom <= 0
+        else _clamp01((supply.purity_pct - demand.min_purity_pct) / headroom)
     )
     volume_fit = _clamp01(supply.volume_t / demand.volume_t)
     distance_fit = _clamp01(1 - km / config.DISTANCE_FIT_CEILING_KM)
     rating_fit = _clamp01(supply.seller_rating / 5)
 
-    if price_fit == 0 or purity_fit == 0 or contaminant_fit == 0:
-        return None
-
     w = config.SCORE_WEIGHTS
     score = 100 * (
         w["price"] * price_fit
-        + w["purity"] * purity_fit
         + w["distance"] * distance_fit
-        + w["contaminant"] * contaminant_fit
+        + w["purity"] * purity_fit
         + w["volume"] * volume_fit
         + w["rating"] * rating_fit
     )
@@ -106,10 +111,7 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
         "breakdown": {
             "listing_per_t": round(supply.price_per_t),
             "haul_per_t": haul["cost_per_t"],
-            "purification_per_t": round(purify_per_t),
-            "cleanup_per_t": round(cleanup_per_t),
         },
-        "purity_gap": round(purity_gap, 2),
         "haul": haul,
         "distance_km": km,
         "rate_source": source,
@@ -117,9 +119,8 @@ def evaluate(supply: Supply, demand: Demand) -> dict | None:
         "contaminant_detail": contaminant_detail,
         "fits": {
             "price": round(price_fit, 3),
-            "purity": round(purity_fit, 3),
             "distance": round(distance_fit, 3),
-            "contaminant": round(contaminant_fit, 3),
+            "purity": round(purity_fit, 3),
             "volume": round(volume_fit, 3),
             "rating": round(rating_fit, 3),
         },

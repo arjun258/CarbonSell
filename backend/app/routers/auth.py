@@ -4,7 +4,9 @@ from sqlalchemy.orm import Session
 from .. import config
 from ..db import get_db
 from ..models import Address, CaptureMethod, Company, User
-from ..schemas import AddressIn, LoginIn, SignupIn, address_out, company_out
+from ..schemas import (
+    AddressIn, CaptureMethodIn, LoginIn, SignupIn, address_out, company_out,
+)
 from ..security import current_user, hash_password, make_token, verify_password
 
 router = APIRouter(tags=["auth"])
@@ -81,6 +83,9 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
         "company": company_out(company, reveal_phone=True),
         "addresses": [address_out(a) for a in sorted(company.addresses, key=lambda a: a.id)],
         "capture_methods": [m.method for m in company.capture_methods],
+        "capture_method_rows": [
+            {"id": m.id, "method": m.method} for m in company.capture_methods
+        ],
     }
 
 
@@ -95,3 +100,36 @@ def add_address(body: AddressIn, user: User = Depends(current_user), db: Session
     db.commit()
     db.refresh(row)
     return address_out(row)
+
+
+@router.post("/capture-methods")
+def add_capture_method(
+    body: CaptureMethodIn,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """Sellers add capture methods after signup, from the profile page or
+    inline while writing a listing."""
+    if user.role != "emitter":
+        raise HTTPException(403, "Only emitters record capture methods")
+    method = body.method.strip()
+    existing = [m.method.lower() for m in user.company.capture_methods]
+    if method.lower() in existing:
+        raise HTTPException(409, "You already have that capture method")
+    db.add(CaptureMethod(company_id=user.company_id, method=method))
+    db.commit()
+    return {"capture_methods": [m.method for m in user.company.capture_methods]}
+
+
+@router.delete("/capture-methods/{method_id}")
+def remove_capture_method(
+    method_id: int,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    row = db.get(CaptureMethod, method_id)
+    if row is None or row.company_id != user.company_id:
+        raise HTTPException(404, "No such capture method")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}

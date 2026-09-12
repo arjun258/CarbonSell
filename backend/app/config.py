@@ -42,14 +42,10 @@ HANDLING_PER_TRIP = 1500   # loading + unloading, INR
 RETURN_FACTOR = 1.8        # the tanker comes back empty
 HAVERSINE_DETOUR = 1.25    # crow-flight -> road, for the offline fallback
 
-# ---------------------------------------------------------------- purity
-# Superlinear on purpose: the last points of purity cost the most.
-PURIFICATION_BASE = 280
-PURIFICATION_EXP = 1.35
-PURITY_GAP_CEILING = 15.0  # more than this and the match is infeasible
-
 # ---------------------------------------------------------------- contaminants
 # All concentrations in ppm, one unit everywhere. 1% = 10,000 ppm.
+# Buyers may declare caps; if they do not, contaminants are not used to
+# filter at all.
 SPECIES = [
     {"code": "N2", "label": "Nitrogen (N2)"},
     {"code": "O2", "label": "Oxygen (O2)"},
@@ -61,27 +57,17 @@ SPECIES = [
     {"code": "HC", "label": "Hydrocarbons / VOC"},
     {"code": "NH3", "label": "Ammonia (NH3)"},
 ]
-REMOVAL_COST_PER_T = {
-    "H2O": 150,   # drying
-    "N2": 200,    # inerts, cryogenic separation
-    "O2": 400,    # deoxo
-    "SO2": 500,   # scrubbing
-    "NOx": 480,
-    "H2S": 600,   # poisons methanol catalysts, expensive to reach low ppm
-    "CO": 450,
-    "HC": 450,
-    "NH3": 350,
-}
-CLEANUP_INFEASIBLE_MULTIPLE = 10   # >10x over cap: drop, don't price a fantasy
-CLEANUP_FIT_SCALE = 900            # rupees of cleanup that zeroes contaminant_fit
 
 # ---------------------------------------------------------------- scoring
+# Delivered cost is the seller's price plus haulage, nothing else. Purity
+# and contaminants are pass/fail gates, not charges - so the score weighs
+# price, distance, how much headroom the purity gives, whether the seller
+# can fill the order, and their track record.
 SCORE_WEIGHTS = {
-    "price": 0.28,
-    "purity": 0.20,
-    "distance": 0.18,
-    "contaminant": 0.12,
-    "volume": 0.12,
+    "price": 0.35,
+    "distance": 0.25,
+    "purity": 0.15,
+    "volume": 0.15,
     "rating": 0.10,
 }
 DISTANCE_FIT_CEILING_KM = 800
@@ -101,52 +87,6 @@ CAPTURE_METHODS = [
     "Flue-gas scrubbing", "Fermentation / bio-CO2", "Direct air capture",
 ]
 PICKUP_SLOTS = ["06:00-09:00", "10:00-13:00", "14:00-17:00", "18:00-21:00"]
-
-# ---------------------------------------------------------------- presets
-# Indicative starting values for the demo, tuned for a readable market.
-# NOT a standards citation: real caps come from ISBT / EIGA specs.
-USE_CASE_PRESETS = {
-    "Beverage carbonation": {
-        "min_purity": 99.9,
-        "caps": {"O2": 30, "H2S": 5, "HC": 20, "NH3": 2, "H2O": 20},
-        "note": "Food-contact grade. Taste and odour fail long before safety does.",
-    },
-    "Methanol & synfuel": {
-        "min_purity": 99.0,
-        "caps": {"H2S": 3, "SO2": 10, "HC": 100},
-        "note": "Sulphur poisons the synthesis catalyst. This is the expensive one.",
-    },
-    "Urea / fertiliser": {
-        "min_purity": 98.5,
-        "caps": {"H2S": 10, "HC": 200},
-        "note": "Catalyst life and product quality.",
-    },
-    "Greenhouse / agriculture": {
-        "min_purity": 99.0,
-        "caps": {"NOx": 20, "CO": 50, "HC": 100},
-        "note": "Plants are damaged by NOx and ethylene at ppm levels.",
-    },
-    "Concrete curing": {
-        "min_purity": 95.0,
-        "caps": {"SO2": 500},
-        "note": "Tolerant use case, and the natural home for lower-grade streams.",
-    },
-    "Dry ice": {
-        "min_purity": 99.5,
-        "caps": {"H2O": 20, "O2": 50},
-        "note": "Moisture wrecks block quality.",
-    },
-    "Welding & industrial gas": {
-        "min_purity": 99.5,
-        "caps": {"H2O": 30, "O2": 50},
-        "note": "Moisture causes weld porosity.",
-    },
-    "Algae cultivation": {
-        "min_purity": 96.0,
-        "caps": {"SO2": 200, "NOx": 200},
-        "note": "Tolerant, but sulphur and NOx stress the culture.",
-    },
-}
 
 # ---------------------------------------------------------------- ola maps
 OLA_BASE = "https://api.olamaps.io"

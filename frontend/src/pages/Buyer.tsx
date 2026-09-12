@@ -57,7 +57,7 @@ export function BuyerOverview() {
               <Card key={`${m.requirement_id}-${m.listing_id}`} className="px-4 py-3">
                 <div className="flex flex-wrap items-baseline gap-2">
                   <span className="font-medium">{m.seller_name}</span>
-                  <Pill>{m.use_case}</Pill>
+                  <Pill>{m.city}</Pill>
                   <span className="tnum ml-auto text-lg font-semibold">
                     ₹{inr(m.delivered_per_t)}
                     <span className="text-xs font-normal text-muted">/t delivered</span>
@@ -126,11 +126,12 @@ export function Requirements() {
         {rows.map((r) => (
           <Card key={r.id} className="px-4 py-3">
             <div className="flex flex-wrap items-baseline gap-3">
-              <span className="font-medium">{r.use_case}</span>
+              <span className="font-medium">
+                {inr(r.volume_t)} t/mo · min {r.min_purity_pct}%
+              </span>
               <Pill>{r.address.city}</Pill>
               <span className="tnum text-sm text-muted">
-                {inr(r.volume_t)} t/mo · min {r.min_purity_pct}% · budget ₹
-                {inr(r.budget_per_t)}/t
+                budget ₹{inr(r.budget_per_t)}/t delivered · {r.address.label}
               </span>
               <Link
                 to={`/requirements/${r.id}/matches`}
@@ -139,12 +140,11 @@ export function Requirements() {
                 {r.match_count ?? 0} matches →
               </Link>
             </div>
-            {r.caps.length > 0 && (
-              <p className="tnum mt-1 text-xs text-muted">
-                caps:{" "}
-                {r.caps.map((c) => `${c.species} ≤ ${c.max_ppm}`).join(" · ")}
-              </p>
-            )}
+            <p className="tnum mt-1 text-xs text-muted">
+              {r.caps.length > 0
+                ? `limits: ${r.caps.map((c) => `${c.species} ≤ ${c.max_ppm} ppm`).join(" · ")}`
+                : "no contaminant limits set"}
+            </p>
           </Card>
         ))}
       </div>
@@ -153,13 +153,11 @@ export function Requirements() {
 }
 
 function RequirementForm({ onSaved }: { onSaved: () => void }) {
-  const { meta } = useAuth();
   const [addressId, setAddressId] = useState<number | null>(null);
   const [f, setF] = useState({
     volume_t: 50,
     min_purity_pct: 99,
     budget_per_t: 8000,
-    use_case: "",
   });
   const [caps, setCaps] = useState<Cap[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -168,7 +166,6 @@ function RequirementForm({ onSaved }: { onSaved: () => void }) {
     e.preventDefault();
     setError(null);
     if (!addressId) return setError("Pick a delivery location.");
-    if (!f.use_case) return setError("Pick a use case.");
     try {
       await post("/requirements", { ...f, address_id: addressId, caps });
       onSaved();
@@ -181,33 +178,6 @@ function RequirementForm({ onSaved }: { onSaved: () => void }) {
     <Card className="px-4 py-4">
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Use case">
-            <select
-              className={inputClass}
-              value={f.use_case}
-              onChange={(e) => {
-                const uc = e.target.value;
-                const preset = meta?.use_case_presets[uc];
-                setF({
-                  ...f,
-                  use_case: uc,
-                  min_purity_pct: preset?.min_purity ?? f.min_purity_pct,
-                });
-                if (preset)
-                  setCaps(
-                    Object.entries(preset.caps).map(([s, v]) => ({
-                      species: s,
-                      max_ppm: v,
-                    })),
-                  );
-              }}
-            >
-              <option value="">Select…</option>
-              {(meta?.buyer_categories ?? []).map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </Field>
           <AddressPicker
             label="Delivery location"
             value={addressId}
@@ -232,7 +202,7 @@ function RequirementForm({ onSaved }: { onSaved: () => void }) {
               }
             />
           </Field>
-          <Field label="Budget (₹/tonne delivered)" hint="Includes haulage and any cleanup">
+          <Field label="Budget (₹/tonne delivered)" hint="The seller's price plus haulage">
             <input
               type="number"
               className={inputClass}
@@ -244,12 +214,7 @@ function RequirementForm({ onSaved }: { onSaved: () => void }) {
           </Field>
         </div>
 
-        <ContaminantCaps
-          useCase={f.use_case}
-          caps={caps}
-          setCaps={setCaps}
-          onPreset={(mp) => setF((x) => ({ ...x, min_purity_pct: mp }))}
-        />
+        <ContaminantCaps caps={caps} setCaps={setCaps} />
 
         {error && (
           <p className="border-l-3 border-stop bg-stop-soft px-3 py-2 text-sm">
@@ -287,13 +252,14 @@ export function Matches() {
   return (
     <div className="flex flex-col gap-4">
       <SectionTitle right={`${data.count} feasible of ${data.considered} listings`}>
-        {r.use_case} — {inr(r.volume_t)} t/mo into {r.address.city}
+        {inr(r.volume_t)} t/mo into {r.address.city}
       </SectionTitle>
 
       <p className="tnum text-sm text-muted">
-        min purity {r.min_purity_pct}% · budget ₹{inr(r.budget_per_t)}/t delivered
-        {r.caps.length > 0 &&
-          ` · caps ${r.caps.map((c) => `${c.species}≤${c.max_ppm}`).join(", ")}`}
+        min purity {r.min_purity_pct}% · budget ₹{inr(r.budget_per_t)}/t delivered ·{" "}
+        {r.caps.length > 0
+          ? `limits ${r.caps.map((c) => `${c.species}≤${c.max_ppm}`).join(", ")}`
+          : "no contaminant limits"}
       </p>
 
       {purest && data.matches[0] && purest.listing_id !== data.matches[0].listing_id && (
@@ -312,7 +278,7 @@ export function Matches() {
       {data.matches.length === 0 && (
         <Empty
           title="Nothing clears your spec at this budget"
-          hint="Raise the budget, relax a contaminant cap, or widen the volume."
+          hint="Lower the minimum purity, raise the budget, or relax a contaminant limit."
         />
       )}
 
@@ -961,6 +927,123 @@ function PickupForm({ orderId, onDone }: { orderId: number; onDone: () => void }
   );
 }
 
+/* ------------------------------------------------------ capture methods */
+
+/** Sellers add capture routes after signup — from here, or inline while
+ *  writing a listing. */
+export function CaptureMethods() {
+  const { me, meta, refresh } = useAuth();
+  const [adding, setAdding] = useState(false);
+  const [value, setValue] = useState("");
+  const [custom, setCustom] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  if (!me) return null;
+  const rows = me.capture_method_rows ?? [];
+  const suggestions = (meta?.capture_methods ?? []).filter(
+    (m) => !me.capture_methods.includes(m),
+  );
+
+  const save = async () => {
+    const method = (value === "__custom" ? custom : value).trim();
+    if (!method) return;
+    setError(null);
+    try {
+      await post("/capture-methods", { method });
+      await refresh();
+      setValue("");
+      setCustom("");
+      setAdding(false);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const remove = async (id: number) => {
+    await api(`/capture-methods/${id}`, { method: "DELETE" });
+    await refresh();
+  };
+
+  return (
+    <Card className="px-4 py-3">
+      <div className="flex items-baseline">
+        <Label>Capture methods</Label>
+        <span className="ml-auto text-xs text-muted">
+          these fill the “captured by” dropdown on every listing
+        </span>
+      </div>
+
+      {rows.length === 0 && (
+        <p className="mt-2 text-sm text-muted">
+          None yet — add one and it becomes selectable on your listing form.
+        </p>
+      )}
+
+      <ul className="mt-2 flex flex-wrap gap-2">
+        {rows.map((r) => (
+          <li
+            key={r.id}
+            className="flex items-center gap-2 border border-rule px-2 py-1 text-sm"
+          >
+            {r.method}
+            <button
+              type="button"
+              className="text-xs text-stop"
+              onClick={() => remove(r.id)}
+              title="Remove"
+            >
+              ✕
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {adding ? (
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <Field label="Method">
+            <select
+              className={inputClass}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+            >
+              <option value="">Select…</option>
+              {suggestions.map((m) => (
+                <option key={m}>{m}</option>
+              ))}
+              <option value="__custom">Something else…</option>
+            </select>
+          </Field>
+          {value === "__custom" && (
+            <Field label="Name it">
+              <input
+                autoFocus
+                className={inputClass}
+                placeholder="e.g. Calcium looping"
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+              />
+            </Field>
+          )}
+          <Button onClick={save}>Save</Button>
+          <Button variant="ghost" onClick={() => setAdding(false)}>
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <Button variant="ghost" className="mt-3" onClick={() => setAdding(true)}>
+          + Add capture method
+        </Button>
+      )}
+
+      {error && (
+        <p className="mt-2 border-l-3 border-stop bg-stop-soft px-3 py-2 text-sm">
+          {error}
+        </p>
+      )}
+    </Card>
+  );
+}
+
 /* -------------------------------------------------------------- profile */
 
 export function Profile() {
@@ -1014,16 +1097,7 @@ export function Profile() {
         </Button>
       </Card>
 
-      {isSeller && (
-        <Card className="px-4 py-3">
-          <Label>Capture methods</Label>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {me.capture_methods.map((m) => (
-              <Pill key={m}>{m}</Pill>
-            ))}
-          </div>
-        </Card>
-      )}
+      {isSeller && <CaptureMethods />}
     </div>
   );
 }

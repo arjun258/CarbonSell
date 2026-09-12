@@ -1,5 +1,5 @@
 import { useAuth } from "../auth";
-import { Button, Label, Pill, inputClass } from "../ui";
+import { Label, Pill, inputClass } from "../ui";
 
 export type Row = { species: string; ppm: number };
 export type Cap = { species: string; max_ppm: number };
@@ -110,54 +110,32 @@ export function ContaminantRows({
   );
 }
 
-/** Buyer side: per-species ppm caps, with one-click use-case presets. */
+/** Buyer side: the buyer's own ppm limits. Declaring none is normal and
+ *  means contaminants are not used to filter at all. */
 export function ContaminantCaps({
-  useCase,
   caps,
   setCaps,
-  onPreset,
 }: {
-  useCase: string;
   caps: Cap[];
   setCaps: (c: Cap[]) => void;
-  onPreset?: (minPurity: number) => void;
 }) {
   const { meta } = useAuth();
   const species = meta?.species ?? [];
-  const presets = meta?.use_case_presets ?? {};
-  const preset = presets[useCase];
   const available = species.filter((s) => !caps.some((c) => c.species === s.code));
-
-  const applyPreset = () => {
-    if (!preset) return;
-    setCaps(
-      Object.entries(preset.caps).map(([sp, v]) => ({ species: sp, max_ppm: v })),
-    );
-    onPreset?.(preset.min_purity);
-  };
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline gap-2">
         <Label>Contaminant limits</Label>
-        <span className="text-xs text-muted">maximum ppm you can accept</span>
+        <span className="text-xs text-muted">optional · maximum ppm you accept</span>
       </div>
 
-      {preset && (
-        <div className="border border-rule bg-surface-2 px-3 py-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="ghost" type="button" onClick={applyPreset}>
-              Use {useCase} preset
-            </Button>
-            <span className="text-xs text-muted">
-              min purity {preset.min_purity}% ·{" "}
-              {Object.entries(preset.caps)
-                .map(([s, v]) => `${s} ≤ ${v}`)
-                .join(", ")}
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-ink-2">{preset.note}</p>
-        </div>
+      {caps.length === 0 && (
+        <p className="border border-rule bg-surface-2 px-3 py-2 text-sm text-ink-2">
+          No limits set. Every stream that meets your purity floor will be
+          matched — add a limit only if a specific contaminant matters to your
+          process.
+        </p>
       )}
 
       {caps.length > 0 && (
@@ -168,7 +146,9 @@ export function ContaminantCaps({
               className="flex items-center gap-2 border-b border-rule px-3 py-1.5 last:border-0"
             >
               <span className="w-28 text-sm font-medium">{c.species}</span>
-              <span className="flex-1 text-xs text-muted">≤</span>
+              <span className="flex-1 text-xs text-muted">
+                {species.find((s) => s.code === c.species)?.label} ≤
+              </span>
               <input
                 type="number"
                 min={0}
@@ -214,8 +194,7 @@ export function ContaminantCaps({
       )}
 
       <p className="text-xs text-muted">
-        Over-cap listings are not hidden — they rank lower and show the cleanup
-        cost in their delivered price.
+        A stream over any limit you set will not be offered to you.
       </p>
     </div>
   );

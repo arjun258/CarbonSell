@@ -31,7 +31,6 @@ def demand_from_requirement(req: Requirement) -> Demand:
         volume_t=req.volume_t,
         min_purity_pct=req.min_purity_pct,
         budget_per_t=req.budget_per_t,
-        use_case=req.use_case,
         lat=req.address.lat,
         lng=req.address.lng,
         caps={c.species: c.max_ppm for c in req.caps},

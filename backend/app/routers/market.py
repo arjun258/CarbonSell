@@ -171,7 +171,6 @@ def create_requirement(
     req = Requirement(
         company_id=user.company_id, address_id=address.id, volume_t=body.volume_t,
         min_purity_pct=body.min_purity_pct, budget_per_t=body.budget_per_t,
-        use_case=body.use_case,
     )
     db.add(req)
     db.flush()

@@ -31,6 +31,7 @@ export type Me = {
   company: Company;
   addresses: Address[];
   capture_methods: string[];
+  capture_method_rows: { id: number; method: string }[];
 };
 
 export type Meta = {
@@ -39,10 +40,6 @@ export type Meta = {
   capture_methods: string[];
   species: { code: string; label: string }[];
   pickup_slots: string[];
-  use_case_presets: Record<
-    string,
-    { min_purity: number; caps: Record<string, number>; note: string }
-  >;
   trucks: { name: string; cap_t: number; rate_km: number }[];
 };
 
@@ -76,7 +73,6 @@ export type Requirement = {
   volume_t: number;
   min_purity_pct: number;
   budget_per_t: number;
-  use_case: string;
   caps: { species: string; max_ppm: number }[];
   match_count?: number;
 };
@@ -111,10 +107,7 @@ export type Match = {
   breakdown: {
     listing_per_t: number;
     haul_per_t: number;
-    purification_per_t: number;
-    cleanup_per_t: number;
   };
-  purity_gap: number;
   haul: Haul;
   distance_km: number;
   rate_source: string;
@@ -124,8 +117,6 @@ export type Match = {
     actual_ppm: number;
     cap_ppm: number;
     over: boolean;
-    cost_per_t: number;
-    infeasible: boolean;
   }[];
   fits: Record<string, number>;
   contact_shared?: boolean;

@@ -108,7 +108,6 @@ class Requirement(Base):
     volume_t: Mapped[float] = mapped_column(Float)
     min_purity_pct: Mapped[float] = mapped_column(Float)
     budget_per_t: Mapped[float] = mapped_column(Float)          # delivered, per tonne
-    use_case: Mapped[str] = mapped_column(String(60))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
 
     company: Mapped[Company] = relationship()

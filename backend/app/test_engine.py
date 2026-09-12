@@ -6,24 +6,32 @@ Run:  python -m app.test_engine        (prints the market)
 from .db import SessionLocal
 from .engine import cheapest_haul, rank
 from .loaders import active_supplies, demand_from_requirement
-from .models import Requirement
+from .models import Company, Requirement
 
 
-def market_for(use_case: str):
+def market_for(company_fragment: str):
+    """Rank the market for the first requirement of a named buyer."""
     db = SessionLocal()
-    req = db.query(Requirement).filter(Requirement.use_case == use_case).first()
-    assert req is not None, f"no seeded requirement for {use_case}"
+    req = (
+        db.query(Requirement)
+        .join(Company, Requirement.company_id == Company.id)
+        .filter(Company.name.like(f"%{company_fragment}%"))
+        .order_by(Requirement.id)
+        .first()
+    )
+    assert req is not None, f"no seeded requirement for {company_fragment}"
     matches = rank(active_supplies(db, "west"), demand_from_requirement(req))
+    caps = ", ".join(f"{c.species}<={c.max_ppm:.0f}" for c in req.caps) or "no caps"
     label = (
-        f"{req.company.name} — {use_case} — {req.volume_t:.0f} t/mo, "
-        f"min {req.min_purity_pct}%, budget Rs {req.budget_per_t:,.0f}/t"
+        f"{req.company.name} — {req.company.category} — {req.volume_t:.0f} t/mo, "
+        f"min {req.min_purity_pct}%, budget Rs {req.budget_per_t:,.0f}/t, {caps}"
     )
     db.close()
     return label, matches
 
 
-def show(use_case: str, limit: int = 6) -> None:
-    label, matches = market_for(use_case)
+def show(company_fragment: str, limit: int = 6) -> None:
+    label, matches = market_for(company_fragment)
     print(f"\n{label}")
     print(f"{len(matches)} feasible matches\n")
     head = f"{'#':>2} {'seller':<28}{'city':<12}{'pur%':>6}{'km':>6}{'truck':>26}{'trips':>6}{'dlvd/t':>9}{'score':>7}"
@@ -39,9 +47,9 @@ def show(use_case: str, limit: int = 6) -> None:
     if matches:
         b = matches[0]["breakdown"]
         print(
-            f"\n   #1 breakdown/t: listing {b['listing_per_t']:,} + haul {b['haul_per_t']:,}"
-            f" + purify {b['purification_per_t']:,} + cleanup {b['cleanup_per_t']:,}"
-            f" = {matches[0]['delivered_per_t']:,}   [{matches[0]['rate_source']}]"
+            f"\n   #1 breakdown/t: listing {b['listing_per_t']:,}"
+            f" + haul {b['haul_per_t']:,} = {matches[0]['delivered_per_t']:,}"
+            f"   [{matches[0]['rate_source']}]"
         )
 
 
@@ -56,33 +64,53 @@ def test_haul_penalises_small_volumes_per_tonne():
 
 
 def test_headline_case_transport_beats_purity():
-    """Concrete curing in Nagpur. The claim the whole product rests on:
-    the best delivered price is a nearby mid-purity stream, not the
-    purest gas on the platform - because haulage dominates the bill."""
-    _, matches = market_for("Concrete curing")
-    assert matches, "no feasible matches for concrete curing"
+    """Nagpur precast concrete. The claim the whole product rests on: the
+    best delivered price is a nearby lower-purity stream, not the purest
+    gas on the platform - because haulage dominates the bill."""
+    _, matches = market_for("Nagpur")
+    assert matches, "no feasible matches for the Nagpur requirement"
     top = matches[0]
     purest = max(matches, key=lambda m: m["purity_pct"])
 
     assert top["listing_id"] != purest["listing_id"], "top match is also the purest: no story"
     assert purest["delivered_per_t"] > top["delivered_per_t"], "the purest option must cost more"
     assert top["haul"]["cost_per_t"] < purest["haul"]["cost_per_t"], "haulage should be the reason"
-    # And a sub-spec stream needing purification still beats the far clean one.
-    sub_spec = [m for m in matches if m["purity_gap"] > 0]
-    assert sub_spec, "no purification case in the market"
-    assert sub_spec[0]["delivered_per_t"] < purest["delivered_per_t"]
 
 
-def test_contaminant_gate_drops_impossible_streams():
-    """Beverage caps are single-digit ppm; a cement scrubber stream is
-    orders of magnitude over and must not appear at any price."""
-    _, matches = market_for("Beverage carbonation")
-    assert matches
-    assert not any("Cement" in m["seller_name"] for m in matches), [
-        m["seller_name"] for m in matches
-    ]
+def test_delivered_price_is_only_product_plus_haulage():
+    _, matches = market_for("Nagpur")
+    for m in matches:
+        assert set(m["breakdown"]) == {"listing_per_t", "haul_per_t"}
+        assert sum(m["breakdown"].values()) == m["delivered_per_t"]
+
+
+def test_purity_is_a_floor_not_a_charge():
+    """Nothing below the buyer's minimum appears at any price."""
+    db = SessionLocal()
+    req = (
+        db.query(Requirement).join(Company, Requirement.company_id == Company.id)
+        .filter(Company.name.like("%Nagpur%")).order_by(Requirement.id).first()
+    )
+    floor = req.min_purity_pct
+    db.close()
+    _, matches = market_for("Nagpur")
+    assert all(m["purity_pct"] >= floor for m in matches)
+
+
+def test_declared_caps_filter_and_absent_caps_do_not():
+    """A buyer who declares caps gets them enforced; a buyer who declares
+    none is not filtered on contaminants at all."""
+    _, capped = market_for("Vadodara")          # H2S <= 10 ppm
+    assert capped
+    for m in capped:
+        assert m["contaminant_detail"], "caps should be reported back"
+        assert all(not d["over"] for d in m["contaminant_detail"])
+
+    _, uncapped = market_for("Bhavnagar Algae")  # no caps declared
+    assert uncapped
+    assert all(m["contaminant_detail"] == [] for m in uncapped)
 
 
 if __name__ == "__main__":
-    for uc in ("Concrete curing", "Methanol & synfuel", "Beverage carbonation"):
-        show(uc)
+    for buyer in ("Nagpur", "Kutch Methanol", "Panvel"):
+        show(buyer)

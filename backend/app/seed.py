@@ -106,16 +106,18 @@ LISTINGS = [
     (7, 0, 40, 92.8, "gas", 1480, "steel", "2026-09-30", True),
 ]
 
-# (buyer index, address index, volume, min_purity, budget, use_case)
+# (buyer index, address index, volume, min_purity, budget, caps in ppm)
+# Caps are the buyer's own choice. Several requirements declare none, which
+# means contaminants are not used to filter them at all.
 REQUIREMENTS = [
-    (0, 0, 50, 99.0, 8500, "Methanol & synfuel"),
-    (0, 1, 120, 98.5, 8000, "Methanol & synfuel"),
-    (1, 0, 30, 99.9, 9500, "Beverage carbonation"),
-    (2, 0, 25, 99.0, 8000, "Greenhouse / agriculture"),
-    (3, 0, 40, 96.0, 6500, "Algae cultivation"),
-    (4, 0, 60, 95.0, 6500, "Concrete curing"),
-    (5, 0, 20, 99.5, 9000, "Dry ice"),
-    (6, 0, 80, 98.5, 7500, "Urea / fertiliser"),
+    (0, 0, 50, 99.0, 8500, {"H2S": 5}),
+    (0, 1, 120, 98.5, 8000, {}),
+    (1, 0, 30, 99.5, 9500, {"O2": 1000, "H2S": 5}),
+    (2, 0, 25, 99.0, 8000, {"NOx": 50}),
+    (3, 0, 40, 96.0, 6500, {}),
+    (4, 0, 60, 95.0, 6500, {}),
+    (5, 0, 20, 99.5, 9000, {"H2O": 100}),
+    (6, 0, 80, 98.5, 7500, {"H2S": 10}),
 ]
 
 
@@ -187,16 +189,16 @@ def run() -> None:
         listings.append(listing)
 
     requirements: list[Requirement] = []
-    for bi, ai, vol, min_purity, budget, use_case in REQUIREMENTS:
+    for bi, ai, vol, min_purity, budget, caps in REQUIREMENTS:
         company = buyers[bi]
         addr = sorted(company.addresses, key=lambda a: a.id)[ai]
         req = Requirement(
             company_id=company.id, address_id=addr.id, volume_t=vol,
-            min_purity_pct=min_purity, budget_per_t=budget, use_case=use_case,
+            min_purity_pct=min_purity, budget_per_t=budget,
         )
         db.add(req)
         db.flush()
-        for species, cap in config.USE_CASE_PRESETS[use_case]["caps"].items():
+        for species, cap in caps.items():
             db.add(ContaminantCap(requirement_id=req.id, species=species, max_ppm=cap))
         requirements.append(req)
 

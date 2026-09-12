@@ -39,7 +39,7 @@ check("unauthenticated call is rejected", c.get("/me").status_code == 401)
 
 print("\n2. ranked matches")
 reqs = c.get("/requirements/mine", headers=buyer).json()["requirements"]
-req = next(r for r in reqs if r["use_case"] == "Concrete curing")
+req = min(reqs, key=lambda r: r["min_purity_pct"])   # the Nagpur precast order
 m = c.get(f"/match/{req['id']}", headers=buyer).json()
 top = m["matches"][0]
 purest = max(m["matches"], key=lambda x: x["purity_pct"])
@@ -48,8 +48,10 @@ check("top match is not the purest listing", top["listing_id"] != purest["listin
       f"top {top['purity_pct']}% vs purest {purest['purity_pct']}%")
 check("purest option costs more delivered", purest["delivered_per_t"] > top["delivered_per_t"],
       f"Rs {purest['delivered_per_t']:,} vs {top['delivered_per_t']:,}")
-check("breakdown adds up to the delivered price",
-      sum(top["breakdown"].values()) == top["delivered_per_t"])
+check("delivered price is product + haulage only",
+      set(top["breakdown"]) == {"listing_per_t", "haul_per_t"}
+      and sum(top["breakdown"].values()) == top["delivered_per_t"],
+      f"Rs {top['breakdown']['listing_per_t']:,} + {top['breakdown']['haul_per_t']:,}")
 check("haul plan names a truck and trip count",
       bool(top["haul"]["truck"]) and top["haul"]["trips"] >= 1,
       f"{top['haul']['truck']} x{top['haul']['trips']}, {top['distance_km']} km [{top['rate_source']}]")
@@ -130,6 +132,14 @@ check("buyer cannot create a listing",
           "available_from": "2026-09-13", "source_type": "Oxy-fuel"}, headers=buyer).status_code == 403)
 check("seller cannot query /match",
       c.get(f"/match/{req['id']}", headers=seller).status_code == 403)
+check("seller can add a capture method after signup",
+      c.post("/capture-methods", json={"method": "Calcium looping"},
+             headers=seller).status_code == 200)
+check("the new method is offered by /me",
+      "Calcium looping" in c.get("/me", headers=seller).json()["capture_methods"])
+check("buyers cannot add capture methods",
+      c.post("/capture-methods", json={"method": "Nope"}, headers=buyer).status_code == 403)
+
 other = login("buyer@panvel.demo")
 check("another buyer cannot read this conversation",
       c.get(f"/threads/{thread['id']}/messages", headers=other).status_code == 403)

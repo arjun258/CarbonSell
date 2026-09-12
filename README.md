@@ -67,9 +67,16 @@ Password `demo1234` for all of them — the sign-in screen has one-click buttons
 | `buyer@kutch.demo` | Kutch Methanol — buyer 
 | `emitter@kutch.demo` | Kutch Cement — seller 
 
-Try: sign in as `buyer@nagpur.demo` → **My requirements** → *Concrete curing*
-→ **matches**. The top match is not the purest gas available, and the
-breakdown says why.
+Try: sign in as `buyer@nagpur.demo` → **My requirements** → **matches**. The
+top match is not the purest gas available, and the breakdown says why.
+
+**How a match is priced and ranked.** Delivered cost is the seller's price
+plus haulage — nothing else. Purity is a floor and contaminant limits are a
+filter: a stream either qualifies or it does not, and nobody is charged for a
+clean-up the platform is not doing. A buyer who declares no contaminant limits
+is not filtered on composition at all. What is left is scored out of 100 on
+price (35%), distance (25%), purity headroom (15%), volume (15%) and seller
+rating (10%), and every component is drawn as a bar on the match card.
 
 ## Reset and verify
 
@@ -122,11 +129,11 @@ cd backend && ../.venv/bin/python -m scripts.warm_distances
 
 ```
 backend/app/
-  config.py      every tunable number: truck rates, score weights, presets
+  config.py      every tunable number: truck rates, score weights
   models.py      13 tables
   schemas.py     request bodies + the serializers that mask phone numbers
   security.py    bcrypt + JWT + get_current_user
-  engine/        distance, cheapest_haul, cleanup costs, scoring
+  engine/        distance, cheapest_haul, spec checks, scoring
   routers/       auth, geo, market, deals, chat, dashboard
   seed.py        West India demo data
 frontend/src/

@@ -54,7 +54,7 @@ def dashboard(user: User = Depends(current_user), db: Session = Depends(get_db))
         matches = rank(active_supplies(db, r.address.region), demand_from_requirement(r))
         for m in matches[:2]:
             m["requirement_id"] = r.id
-            m["use_case"] = r.use_case
+            m["use_case"] = r.company.category
             best.append(m)
     best.sort(key=lambda m: -m["score"])
     delivered = [o.delivered_per_t for o in orders if o.delivered_per_t]
