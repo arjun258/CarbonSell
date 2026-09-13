@@ -1,22 +1,44 @@
-# CarbonSell — Carbon Capture-to-Product Marketplace
+# CarbonSell
 
-Team Anomaly · Circular Carbon Ecosystem
+**Team Anomaly · Circular Carbon Ecosystem**
 
-A two-sided marketplace where industrial emitters list captured CO₂ and
-utilisers find it
-React + Vite · FastAPI · SQLite · Ola Maps.
+React + Vite · FastAPI · SQLite · Ola Maps
 
----
+## The problem
 
-## Prerequisites
+Cement plants, steel mills and power stations capture CO₂ and then pay to
+compress, store and bury it. At the same time, methanol producers, fertiliser
+plants, bottlers, greenhouses and concrete yards buy CO₂ as a raw material.
+The two sides rarely find each other: there is no common place to see who has
+gas, how pure it is, how far away it sits, or what it would actually cost to
+get it through the gate. So captured carbon gets buried, and capture stays a
+pure expense.
 
-- Python 3.12+
-- Node 20+
-- **Ola Maps credentials** from [Krutrim Cloud](https://maps.olakrutrim.com) —
-  required: the app uses them for address autocomplete and for road distance,
-  which every delivered price depends on
+## The solution
 
-## First-time setup
+A marketplace that prices CO₂ **delivered**, not at the gate.
+
+- Emitters list what they capture — volume, purity, a full contaminant
+  profile in ppm, and a pickup site.
+- Buyers state what they need — volume, minimum purity, a price ceiling for
+  the gas, and any contaminant limits that matter to their process.
+- Every seller who qualifies is ranked by what they actually cost: the gas
+  plus haulage, with the cheapest truck class and trip count worked out from
+  real road distance. The answer is often a nearer, less pure stream than the
+  purest gas on the platform — haulage decides these deals.
+- A listing can run as an auction with a bidding window and a starting price,
+  or sell directly. Sellers see every bidder and can accept, decline, chat,
+  fill an order from several bidders, or let it award itself at the close.
+- Buyers and sellers message each other from a listing, and a seller releases
+  their phone number to a specific buyer when they choose to.
+
+## Run it
+
+**Needs** Python 3.12+, Node 20+, and Ola Maps credentials from
+[Krutrim Cloud](https://maps.olakrutrim.com) for address autocomplete and road
+distance.
+
+Set up once:
 
 ```bash
 python3 -m venv .venv && ./.venv/bin/pip install -r backend/requirements.txt
@@ -26,22 +48,15 @@ python3 -m venv .venv && ./.venv/bin/pip install -r backend/requirements.txt
 cd frontend && npm install
 ```
 
-Create `backend/.env` from the template and fill in your Ola Maps credentials
-(see [Ola Maps](#ola-maps) below):
-
 ```bash
-cp backend/.env.example backend/.env
+cp backend/.env.example backend/.env    # then add your Ola credentials
 ```
-
-Seed the database:
 
 ```bash
 cd backend && ../.venv/bin/python -m app.seed
 ```
 
-## Run it
-
-Two terminals.
+Then start both, in two terminals:
 
 ```bash
 cd backend && ../.venv/bin/uvicorn app.main:app --reload --port 8000
@@ -51,112 +66,30 @@ cd backend && ../.venv/bin/uvicorn app.main:app --reload --port 8000
 cd frontend && npm run dev
 ```
 
-Open **http://localhost:5173**.
+Open **http://localhost:5173**. API docs at **http://localhost:8000/docs**.
 
-The frontend proxies `/api` to port 8000, so the browser only ever talks to
-:5173.
+To serve it to other machines on the same network, one command starts both and
+prints the addresses:
 
-## Demo logins
+```bash
+./backend/scripts/serve_lan.sh
+```
 
-Password `demo1234` for all of them — the sign-in screen has one-click buttons.
+### Demo logins
+
+Password `demo1234` for all of them, and the sign-in screen has one-click
+buttons. Each browser tab keeps its own session, so you can be signed in as a
+buyer and a seller at the same time.
 
 | Email | Who |
 |---|---|
 | `buyer@nagpur.demo` | Nagpur CarbonCure Concrete — buyer |
 | `emitter@chandrapur.demo` | Chandrapur Super Thermal — seller |
-| `buyer@kutch.demo` | Kutch Methanol — buyer 
-| `emitter@kutch.demo` | Kutch Cement — seller 
+| `buyer@kutch.demo` | Kutch Methanol — buyer |
+| `emitter@kutch.demo` | Kutch Cement — seller |
 
-Try: sign in as `buyer@nagpur.demo` → **My requirements** → **matches**. The
-top match is not the purest gas available, and the breakdown says why.
-
-**How a match is priced and ranked.** Delivered cost is the seller's price
-plus haulage — nothing else. Haulage is trips × rate × road distance: a hired
-tanker is charged at its full rate whether or not it runs full, so nothing is
-pro-rated for a part load.
-
-Three things are pass/fail rather than priced. Purity is a floor. Contaminant
-limits are a filter, and a buyer who declares none is not filtered on
-composition at all. The budget is what the buyer will pay **for the gas
-itself** — haulage is quoted on top and shown separately, never folded into
-the ceiling.
-
-Purity is not scored, only gated: everything that reaches the ranking already
-meets the buyer's minimum, so ranking one acceptable stream above another on
-purity would push an over-specified offer around for no reason the buyer
-cares about.
-
-What survives is scored out of 100 on price (45%), distance (25%), volume
-(18%) and seller rating (12%), and every component is drawn as a bar on the
-match card. Price and distance are judged against the best the market can
-offer — the cheapest delivered price scores 100, the nearest seller scores
-100 — because both only mean anything next to the alternatives. Price uses
-the **delivered** figure, not the ex-works rate, since haulage is most of the
-bill.
-
-## Reset and verify
+### Reset the data
 
 ```bash
 cd backend && ../.venv/bin/python -m app.seed
 ```
-
-```bash
-cd backend && ../.venv/bin/python -m pytest app/test_engine.py -q
-```
-
-```bash
-cd backend && ../.venv/bin/python -m scripts.walkthrough
-```
-
-`seed` drops and recreates everything (no migrations — reseeding takes two
-seconds). `pytest` asserts the ranking behaviour. `walkthrough` drives the
-whole flow through the API with no browser, including the permission
-boundaries; it mutates data, so reseed afterwards.
-
-Print the ranked market as a terminal table:
-
-```bash
-cd backend && ../.venv/bin/python -m app.test_engine
-```
-
-## Ola Maps
-
-Required. Put your Krutrim Cloud credentials in `backend/.env`:
-
-```
-OLA_MAPS_API_KEY=...
-OLA_CLIENT_ID=...
-OLA_CLIENT_SECRET=...
-```
-
-Whitelist `http://localhost:5173`, `http://localhost:8000` and
-`http://127.0.0.1:5173` on the credential's detail page in Krutrim Cloud.
-Nothing needs enabling per API.
-
-Ola Maps powers two things: address autocomplete on signup and the address
-picker, and the road distance behind every delivered price.
-
-
-```bash
-cd backend && ../.venv/bin/python -m scripts.warm_distances
-```
-
-## Layout
-
-```
-backend/app/
-  config.py      every tunable number: truck rates, score weights
-  models.py      13 tables
-  schemas.py     request bodies + the serializers that mask phone numbers
-  security.py    bcrypt + JWT + get_current_user
-  engine/        distance, cheapest_haul, spec checks, scoring
-  routers/       auth, geo, market, deals, chat, dashboard
-  seed.py        West India demo data
-frontend/src/
-  ui.tsx         ScoreBars, CostBreakdown, HaulPlanCard, StatusTimeline…
-  components/    AddressPicker (+ inline add modal), Contaminants, ChatPanel
-  pages/         Auth, Buyer, Seller
-```
-
-Truck rates and contaminant caps in `config.py` are documented estimates tuned
-for a readable demo, not quotes or standards citations.
