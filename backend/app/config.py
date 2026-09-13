@@ -99,8 +99,22 @@ from dotenv import load_dotenv
 
 load_dotenv(BASE_DIR / ".env")
 
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-only-secret")
-OLA_API_KEY = os.getenv("OLA_MAPS_API_KEY", "")
-OLA_CLIENT_ID = os.getenv("OLA_CLIENT_ID", "")
-OLA_CLIENT_SECRET = os.getenv("OLA_CLIENT_SECRET", "")
+
+def _env(name: str, default: str = "") -> str:
+    """Read a secret, forgiving the way people paste them.
+
+    A value pasted into a hosting dashboard often arrives wrapped in quotes
+    or with a trailing space. The service then rejects it and the only
+    symptom is a 401, which looks like a bad key rather than a bad paste.
+    """
+    value = os.getenv(name, default).strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1].strip()
+    return value
+
+
+JWT_SECRET = _env("JWT_SECRET", "dev-only-secret")
+OLA_API_KEY = _env("OLA_MAPS_API_KEY")
+OLA_CLIENT_ID = _env("OLA_CLIENT_ID")
+OLA_CLIENT_SECRET = _env("OLA_CLIENT_SECRET")
 OLA_CONFIGURED = bool(OLA_API_KEY or (OLA_CLIENT_ID and OLA_CLIENT_SECRET))
