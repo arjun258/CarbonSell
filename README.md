@@ -4,33 +4,6 @@
 
 React + Vite · FastAPI · SQLite · Ola Maps
 
-## The problem
-
-Cement plants, steel mills and power stations capture CO₂ and then pay to
-compress, store and bury it. At the same time, methanol producers, fertiliser
-plants, bottlers, greenhouses and concrete yards buy CO₂ as a raw material.
-The two sides rarely find each other: there is no common place to see who has
-gas, how pure it is, how far away it sits, or what it would actually cost to
-get it through the gate. So captured carbon gets buried, and capture stays a
-pure expense.
-
-## The solution
-
-A marketplace that prices CO₂ **delivered**, not at the gate.
-
-- Emitters list what they capture — volume, purity, a full contaminant
-  profile in ppm, and a pickup site.
-- Buyers state what they need — volume, minimum purity, a price ceiling for
-  the gas, and any contaminant limits that matter to their process.
-- Every seller who qualifies is ranked by what they actually cost: the gas
-  plus haulage, with the cheapest truck class and trip count worked out from
-  real road distance. The answer is often a nearer, less pure stream than the
-  purest gas on the platform — haulage decides these deals.
-- A listing can run as an auction with a bidding window and a starting price,
-  or sell directly. Sellers see every bidder and can accept, decline, chat,
-  fill an order from several bidders, or let it award itself at the close.
-- Buyers and sellers message each other from a listing, and a seller releases
-  their phone number to a specific buyer when they choose to.
 
 ## Run it
 
