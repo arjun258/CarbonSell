@@ -61,6 +61,38 @@ def distance(lat1: float, lng1: float, lat2: float, lng2: float):
     return {"road_km": km, "rate_source": source}
 
 
+@router.get("/geo/status")
+def status():
+    """Why is Ola not answering? Reports what this server sees and what Ola
+    says back. Deliberately returns no secret - only lengths and the
+    upstream's own message."""
+    out = {
+        "api_key_len": len(config.OLA_API_KEY),
+        "client_id_len": len(config.OLA_CLIENT_ID),
+        "client_secret_len": len(config.OLA_CLIENT_SECRET),
+        "configured": config.OLA_CONFIGURED,
+    }
+    if not config.OLA_API_KEY:
+        out["probe"] = "no api key to try"
+        return out
+    try:
+        res = httpx.get(
+            f"{config.OLA_BASE}/places/v1/autocomplete",
+            params={"input": "Dahej", "api_key": config.OLA_API_KEY},
+            timeout=config.OLA_TIMEOUT_S,
+        )
+        out["probe_status"] = res.status_code
+        out["probe_body"] = res.text[:300]
+    except Exception as exc:
+        out["probe_error"] = str(exc)[:200]
+
+    try:
+        out["egress_ip"] = httpx.get("https://api.ipify.org", timeout=6).text
+    except Exception:
+        pass
+    return out
+
+
 @router.get("/geo/regions")
 def regions():
     return {"regions": config.REGIONS, "default": config.DEFAULT_REGION}
