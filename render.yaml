@@ -1,0 +1,45 @@
+# Render blueprint: the API and the dashboard, deployed together.
+#
+# New → Blueprint → point it at this repo. Render reads this file and creates
+# both services. The only thing to fill in afterwards is the Ola Maps
+# credentials on the API service.
+services:
+  - type: web
+    name: carbonsell-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+      # Generated once and kept, so sessions survive a redeploy.
+      - key: JWT_SECRET
+        generateValue: true
+      # Fill these in from the Render dashboard - they are not in the repo.
+      - key: OLA_MAPS_API_KEY
+        sync: false
+      - key: OLA_CLIENT_ID
+        sync: false
+      - key: OLA_CLIENT_SECRET
+        sync: false
+
+  - type: web
+    name: carbonsell
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE
+        fromService:
+          type: web
+          name: carbonsell-api
+          property: host
+    routes:
+      # React Router owns every path.
+      - type: rewrite
+        source: /*
+        destination: /index.html

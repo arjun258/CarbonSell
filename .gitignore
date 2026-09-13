@@ -19,3 +19,6 @@ dist/
 
 # stray scratch files
 k.py
+
+# pitch deck stays local
+deck/

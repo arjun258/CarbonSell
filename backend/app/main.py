@@ -1,10 +1,42 @@
+import logging
+import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import config
 from .routers import auth, chat, dashboard, deals, geo, market
 
-app = FastAPI(title=f"{config.APP_NAME} API", version="0.1.0")
+log = logging.getLogger("carbonsell")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Create the schema, and seed it if the database is empty.
+
+    Hosts like Render give a free service an ephemeral disk, so the SQLite
+    file is gone after every deploy and restart. Seeding on boot means the
+    deployed app always comes up with a populated marketplace instead of an
+    empty one. An existing database is left alone.
+    """
+    from .db import Base, SessionLocal, engine
+    from .models import Company
+
+    Base.metadata.create_all(engine)
+    db = SessionLocal()
+    try:
+        if db.query(Company).count() == 0:
+            from .seed import run
+
+            log.warning("empty database - seeding")
+            run()
+    finally:
+        db.close()
+    yield
+
+
+app = FastAPI(title=f"{config.APP_NAME} API", version="0.1.0", lifespan=lifespan)
 
 # Reachable from the machine it runs on and from anything on the same
 # private network - a demo usually means a second laptop and a phone. Public
@@ -18,9 +50,17 @@ LAN_ORIGIN = (
     r"(:\d+)?"
 )
 
+# Plus wherever this is deployed. ALLOWED_ORIGINS is a comma-separated list;
+# *.onrender.com is matched by default so a Render static site just works.
+DEPLOYED_ORIGIN = r"https://[A-Za-z0-9-]+\.onrender\.com"
+ORIGIN_REGEX = f"({LAN_ORIGIN}|{DEPLOYED_ORIGIN})"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=LAN_ORIGIN,
+    allow_origins=[
+        o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()
+    ],
+    allow_origin_regex=ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

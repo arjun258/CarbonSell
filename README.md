@@ -48,6 +48,29 @@ prints the addresses:
 ./backend/scripts/serve_lan.sh
 ```
 
+### Deploy on Render
+
+`render.yaml` at the repo root defines both services. In Render: **New →
+Blueprint**, point it at this repo, and it creates the API and the dashboard
+together. Afterwards, add `OLA_MAPS_API_KEY`, `OLA_CLIENT_ID` and
+`OLA_CLIENT_SECRET` to the **carbonsell-api** service and redeploy.
+
+To wire it up by hand instead:
+
+| | API | Dashboard |
+|---|---|---|
+| Type | Web service (Python) | Static site |
+| Root directory | `backend` | `frontend` |
+| Build | `pip install -r requirements.txt` | `npm install && npm run build` |
+| Start / publish | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` | `dist` |
+
+The dashboard needs `VITE_API_BASE` set to the API's hostname, and a rewrite
+from `/*` to `/index.html` so a refresh on a deep link does not 404.
+
+A free Render disk is wiped on every deploy, so the API seeds itself whenever
+it starts against an empty database — the deployed app always comes up with a
+populated marketplace.
+
 ### Demo logins
 
 Password `demo1234` for all of them, and the sign-in screen has one-click

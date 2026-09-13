@@ -1,6 +1,16 @@
 import type { Region } from "./types";
 
-const BASE = "/api";
+// Locally the Vite dev server proxies /api to port 8000. A deployed build has
+// no proxy, so VITE_API_BASE points straight at the API service. Render hands
+// that over as a bare hostname, so add the scheme when it is missing.
+function apiBase(): string {
+  const raw = String(import.meta.env.VITE_API_BASE ?? "").trim();
+  if (!raw) return "/api";
+  const withScheme = /^https?:\/\//.test(raw) ? raw : `https://${raw}`;
+  return withScheme.replace(/\/+$/, "");
+}
+
+const BASE = apiBase();
 
 export type Health = {
   status: string;
