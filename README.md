@@ -5,8 +5,7 @@
 React + Vite · FastAPI · SQLite · Ola Maps
 
 **Live: [carbonsell.onrender.com](https://carbonsell.onrender.com)** — sign in
-with any demo account below, password `demo1234`. It runs on a free Render
-instance, so the first request after a quiet spell takes a minute to wake up.
+with any demo account below, password `demo1234`. .
 
 
 ## Run it
