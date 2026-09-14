@@ -22,3 +22,6 @@ k.py
 
 # pitch deck stays local
 deck/
+
+# planning notes stay local
+AUCTION_PLAN.md

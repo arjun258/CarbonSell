@@ -2,7 +2,7 @@
 #
 # New → Blueprint → point it at this repo. Render reads this file and creates
 # both services. The only thing to fill in afterwards is the Ola Maps
-# credentials on the API service.
+# credentials on the API servic
 services:
   - type: web
     name: carbonsell-api
